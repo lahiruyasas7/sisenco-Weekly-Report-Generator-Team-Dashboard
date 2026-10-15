@@ -1,483 +1,202 @@
-# PROJECT.md — Weekly Report Generator & Team Dashboard
+# CLAUDE.md — Weekly Report Generator & Team Dashboard
 
-> Paste this file at the start of every Claude session. It is the single source of truth for design decisions.
-> After finishing a slice, update **§12 Progress** and **§13 Decisions Log**, then commit.
+Internal tool: **members** submit structured weekly reports, **managers** review them (approve / request changes) and analyse the team on a chart dashboard.
+Treat this as a real client project: production-quality, secure, tested, explainable line by line (the author must defend every file in a live coding round).
 
-## 1. Product summary
+## Reference files (read before working on the related area)
 
-Internal tool where **team members** submit structured weekly work reports and **managers** review them (approve / request changes), then analyse the whole team on a chart-driven dashboard.
+- DB schema (source of truth): `backend/prisma/schema.prisma` (header comment holds required raw SQL constraints)
+- API contract + dashboard metric definitions + `ReportContent` shape: `docs/API.md`
+- Do not duplicate those here. If code and these files disagree, stop and flag it.
 
-Core loop: `Draft → Submitted → (Needs Correction → edited → Submitted)* → Approved`.
-Every submit creates an immutable **version snapshot**; every review comment is tied to the version it was made against.
+## Stack (fixed, do not swap)
 
-## 2. Stack (fixed)
+- **Backend:** NestJS (REST, prefix `/api/v1`), TypeScript, class-validator/class-transformer, Swagger, Prisma + PostgreSQL, bcrypt, JWT (httpOnly cookie), `@nestjs/throttler`, helmet, luxon
+- **Frontend:** Next.js App Router, TypeScript, Tailwind, shadcn/ui, React Hook Form + Zod, TanStack Query, Recharts
+- **Tests:** Jest + Supertest (backend e2e + unit), optional Vitest/RTL for the report form
+- **Infra:** docker-compose (Postgres dev + test DB), Vercel (frontend), Railway/Render (backend + DB)
+- **Repo:** two independent packages (`backend/`, `frontend/`) in one git repo. **No npm/pnpm workspaces.** Use npm.
+- Pin the Prisma major version at scaffold time and don't upgrade mid-project. If the installed Prisma version needs different generator/datasource config than `schema.prisma` shows, adapt the config only, never the models.
 
-| Layer | Choice |
-|---|---|
-| Frontend | Next.js (App Router), TypeScript, Tailwind CSS, shadcn/ui, React Hook Form + Zod, TanStack Query, Recharts |
-| Backend | NestJS (REST), TypeScript, class-validator/class-transformer DTOs, Swagger |
-| ORM / DB | Prisma + PostgreSQL |
-| Auth | bcrypt password hashing, JWT in httpOnly cookie (SameSite=Lax, Secure in prod), 1-day expiry |
-| Testing | Jest + Supertest (backend e2e for RBAC), optional Vitest/RTL on key forms |
-| Infra | docker-compose (Postgres), Vercel (frontend), Railway/Render (backend + DB) |
-
-**Frontend rules**
-- Next.js is UI only. **No Next.js API routes / server actions for business logic.** NestJS is the only backend.
-- `/api/*` is proxied to NestJS via `next.config.js` rewrites so the browser sees one origin (cookies just work, no CORS).
-- Data fetching is client-side with TanStack Query. Server components only for static layouts.
-- Route protection via `middleware.ts` (redirect unauthenticated; block MEMBER from `/manager/*`, non-ADMIN from `/admin/*`). Backend guards remain the real security boundary.
-
-## 3. Roles & permissions
-
-Roles: `MEMBER`, `MANAGER`, `ADMIN` (ADMIN = MANAGER + user management).
-
-| Capability | MEMBER | MANAGER | ADMIN |
-|---|---|---|---|
-| Register / login / logout / account settings | ✅ | ✅ | ✅ |
-| Create / edit / submit **own** reports | ✅ | ❌ | ❌ |
-| View own report history & detail | ✅ | – | – |
-| View **any** report (read-only content) | ❌ | ✅ | ✅ |
-| Approve / request changes (status + comment only) | ❌ | ✅ | ✅ |
-| Team dashboard, team profile, sections view | ❌ | ✅ | ✅ |
-| Projects: list | ✅ | ✅ | ✅ |
-| Projects: create / edit / archive / delete / assign members | ❌ | ✅ | ✅ |
-| User management (create/invite, change role, deactivate) | ❌ | ❌ | ✅ |
-
-Hard rules
-- A MEMBER can never read or write another member's report (404, not 403, to avoid leaking existence).
-- Managers have **no endpoint** that edits report content. Only `POST /reports/:id/review` changes status/comment.
-- Only MEMBER accounts write reports. Managers/admins do not have personal report pages. (Keeps review logic free of self-review edge cases.)
-- Public registration creates `MEMBER`. Admin promotes roles. Seed creates the first ADMIN.
-- Deactivated users (`isActive=false`) cannot log in; their reports remain.
-
-## 4. Report structure (fixed, identical for everyone)
-
-Order of sections on the form (not customisable by users):
-
-1. Week (Mon–Sun) and Project/category tag
-2. Tasks completed — table: name, priority, planned %, actual %, status, planned hours, spent hours, output/deliverable
-3. Tasks planned for next week
-4. Blockers / challenges (one may be flagged **key issue**)
-5. Achievements / highlights (one may be flagged **key achievement**)
-6. Hours by task type (optional): Development, Testing, Meetings, Documentation, Design, Other
-7. Notes and links (optional)
-
-Validation
-- `weekStart` must be a Monday; `weekEnd = weekStart + 6 days`. One report per user per week. No future weeks beyond the current one.
-- Drafts save leniently. **Submit** requires: project set, ≥1 task, every task has name/priority/status, percentages 0–100, hours ≥ 0.
-- At most one key blocker and one key achievement per report (service check + partial unique index).
-- Blockers carry `isResolved` (used for the "open blockers" metric).
-
-## 5. Status workflow (state machine)
+## Commands (create these scripts in slice 0; keep this list accurate)
 
 ```
-DRAFT ──submit──▶ SUBMITTED ──approve──────────▶ APPROVED (locked)
-                     │
-                     └─request changes (comment required)─▶ NEEDS_CORRECTION
-                                                                │ owner edits
-                                                                └──resubmit──▶ SUBMITTED (new version)
+docker compose up -d                       # postgres (dev) + postgres-test
+cd backend  && npm run start:dev           # API on :4000
+cd backend  && npx prisma migrate dev      # new migration (use --create-only when adding raw SQL)
+cd backend  && npm run seed                # idempotent seed
+cd backend  && npm test                    # unit
+cd backend  && npm run test:e2e            # e2e against TEST_DATABASE_URL
+cd frontend && npm run dev                 # UI on :3000
+cd frontend && npm run lint && npm run typecheck
 ```
 
-| Transition | Who | Rules |
-|---|---|---|
-| create | MEMBER | status = DRAFT, `currentVersion = 0` |
-| DRAFT → SUBMITTED | owner | full submit validation; create `ReportVersion` n=1 |
-| SUBMITTED → APPROVED | MANAGER/ADMIN | creates `Review(APPROVED, versionId=current)` |
-| SUBMITTED → NEEDS_CORRECTION | MANAGER/ADMIN | comment required; creates `Review(CHANGES_REQUESTED)` |
-| NEEDS_CORRECTION → SUBMITTED | owner | validation again; create `ReportVersion` n+1 |
+Before saying a slice is done: lint, typecheck, build, and tests must pass for every package you touched.
 
-Editability: content editable **only** when status is `DRAFT` or `NEEDS_CORRECTION`, and only by the owner. `SUBMITTED` and `APPROVED` are read-only. Delete allowed only for `DRAFT` that was never submitted.
-Invalid transitions return `409 Conflict`. All transition logic lives in one `ReportWorkflowService` (single place to unit test).
+## Architecture rules (hard)
 
-Versioning model
-- Working copy lives in normalised tables (so charts/filters can query it).
-- On every submit, a full JSON **snapshot** is written to `ReportVersion` (immutable).
-- Each `Review` stores `versionId`, so the UI can show "comment made against version 2".
-- Manager review page shows the current version plus a list of past versions (number, submitted timestamp) viewable on demand, with each version's review comment.
+- NestJS is the **only** backend. No Next.js API routes, no server actions for business logic.
+- Browser calls `/api/v1/*` on the Next origin; `next.config.js` rewrites to `BACKEND_URL`. One origin, so no CORS and cookies just work.
+- Frontend data fetching is client-side TanStack Query. Server components only for static layout.
+- if need to handle client states use zustand
+- `middleware.ts` is **UX only**: redirect when the cookie is missing, decode the role with `jose` (no verification) to redirect MEMBER away from `/manager/*` and non-ADMIN away from `/admin/*`. Backend guards are the real security boundary. Never trust the frontend role.
+- Controllers are thin (parse, validate, authorise, delegate). Services hold logic. All multi-row writes use `prisma.$transaction`.
+- No `any`. No business logic in React components (put it in hooks / `lib/`).
 
-"Not yet started" = an active MEMBER with no report row for the selected week.
-"Late" = report not submitted (or submitted) after the deadline. Deadline = end of Sunday of the report week (`REPORT_DUE_OFFSET_DAYS` constant, default 7 days after `weekStart` at 00:00). Pending = not submitted and still before deadline.
+## Roles & visibility
 
-## 6. Database schema (Prisma)
+Roles: `MEMBER`, `MANAGER`, `ADMIN` (ADMIN = MANAGER + user management). Public registration creates `MEMBER`; seed creates the first ADMIN; admin changes roles.
 
-```prisma
-generator client {
-  provider = "prisma-client-js"
-}
+| Capability                                                   | MEMBER   | MANAGER           | ADMIN             |
+| ------------------------------------------------------------ | -------- | ----------------- | ----------------- |
+| Create/edit/submit/delete-draft **own** reports, own history | ✅       | ❌                | ❌                |
+| Read reports                                                 | own only | any **non-draft** | any **non-draft** |
+| Review (approve / request changes)                           | ❌       | ✅                | ✅                |
+| Team week view, sections, member profile, dashboard          | ❌       | ✅                | ✅                |
+| Projects: list                                               | ✅       | ✅                | ✅                |
+| Projects: create/edit/archive/delete/assign members          | ❌       | ✅                | ✅                |
+| User management                                              | ❌       | ❌                | ✅                |
 
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
+Hard rules:
 
-enum Role         { MEMBER MANAGER ADMIN }
-enum ReportStatus { DRAFT SUBMITTED NEEDS_CORRECTION APPROVED }
-enum Priority     { LOW MEDIUM HIGH CRITICAL }
-enum TaskStatus   { COMPLETED IN_PROGRESS BLOCKED DEFERRED }
-enum TaskType     { DEVELOPMENT TESTING MEETINGS DOCUMENTATION DESIGN OTHER }
-enum ReviewAction { APPROVED CHANGES_REQUESTED }
+- Only MEMBERs write reports. Managers/admins have no personal report pages.
+- A member requesting another member's report gets **404**, not 403.
+- A manager requesting a `DRAFT` report gets **404**. Drafts are visible only to their owner (assignment requirement). `/team/week-status` may show `DRAFT` as a status but never content.
+- **No endpoint lets a manager edit report content.** `POST /reports/:id/review` is the only manager write on a report.
+- **Content a non-owner sees is always the snapshot of `currentVersion`**, never the working tables. This avoids showing a member's half-finished edits during `NEEDS_CORRECTION`. The owner sees the working copy.
+- `ReportAccessService` (`assertCanRead` / `assertCanWrite` / `loadForViewer`) is the single RBAC choke point for report data. Every report endpoint goes through it.
+- `JwtStrategy.validate()` loads the user from the DB on every request and rejects if missing or `isActive=false`; `req.user.role` comes from the DB, not the token. (Deactivation and role changes must apply immediately.)
+- Admin cannot deactivate themselves, nor demote/deactivate the **last active ADMIN**.
 
-model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  name         String
-  passwordHash String
-  role         Role     @default(MEMBER)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+## Report workflow (all logic in `ReportWorkflowService`)
 
-  reports            Report[]
-  reviews            Review[]
-  versionsSubmitted  ReportVersion[]
-  projectMemberships ProjectMember[]
-}
-
-model Project {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  description String?
-  color       String?
-  isArchived  Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  members ProjectMember[]
-  reports Report[]
-  tasks   ReportTask[]
-}
-
-model ProjectMember {
-  projectId String
-  userId    String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([projectId, userId])
-}
-
-model Report {
-  id             String       @id @default(uuid())
-  userId         String
-  projectId      String
-  weekStart      DateTime     @db.Date
-  weekEnd        DateTime     @db.Date
-  status         ReportStatus @default(DRAFT)
-  currentVersion Int          @default(0)   // latest submitted version number, 0 = never submitted
-  notes          String?
-  links          String[]
-  submittedAt    DateTime?                  // latest submission time
-  reviewedAt     DateTime?                  // latest review time
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
-  project  Project   @relation(fields: [projectId], references: [id], onDelete: Restrict)
-
-  tasks         ReportTask[]
-  nextWeekTasks NextWeekTask[]
-  blockers      Blocker[]
-  achievements  Achievement[]
-  timeEntries   TimeEntry[]
-  versions      ReportVersion[]
-  reviews       Review[]
-
-  @@unique([userId, weekStart])
-  @@index([status])
-  @@index([weekStart])
-  @@index([projectId])
-}
-
-model ReportTask {
-  id             String     @id @default(uuid())
-  reportId       String
-  projectId      String?                       // optional override; falls back to report.projectId
-  position       Int
-  name           String
-  priority       Priority
-  plannedPercent Int                           // 0-100
-  actualPercent  Int                           // 0-100
-  status         TaskStatus
-  plannedHours   Float
-  spentHours     Float
-  output         String?
-
-  report  Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-
-  @@index([reportId])
-}
-
-model NextWeekTask {
-  id             String   @id @default(uuid())
-  reportId       String
-  position       Int
-  description    String
-  priority       Priority @default(MEDIUM)
-  estimatedHours Float?
-
-  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
-
-  @@index([reportId])
-}
-
-model Blocker {
-  id          String  @id @default(uuid())
-  reportId    String
-  position    Int
-  description String
-  isKey       Boolean @default(false)
-  isResolved  Boolean @default(false)
-
-  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
-
-  @@index([reportId])
-}
-
-model Achievement {
-  id          String  @id @default(uuid())
-  reportId    String
-  position    Int
-  description String
-  isKey       Boolean @default(false)
-
-  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
-
-  @@index([reportId])
-}
-
-model TimeEntry {
-  id       String   @id @default(uuid())
-  reportId String
-  taskType TaskType
-  hours    Float
-
-  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
-
-  @@unique([reportId, taskType])
-}
-
-model ReportVersion {
-  id            String   @id @default(uuid())
-  reportId      String
-  versionNumber Int
-  snapshot      Json                          // full report content at submit time (see shape below)
-  submittedById String
-  submittedAt   DateTime @default(now())
-
-  report      Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  submittedBy User   @relation(fields: [submittedById], references: [id])
-  reviews     Review[]
-
-  @@unique([reportId, versionNumber])
-}
-
-model Review {
-  id         String       @id @default(uuid())
-  reportId   String
-  versionId  String                            // the version this review was made against
-  reviewerId String
-  action     ReviewAction
-  comment    String?                           // required when CHANGES_REQUESTED, optional on APPROVED
-  createdAt  DateTime     @default(now())
-
-  report   Report        @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  version  ReportVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  reviewer User          @relation(fields: [reviewerId], references: [id])
-
-  @@index([reportId])
-  @@index([createdAt])
-}
+```
+DRAFT --submit--> SUBMITTED --approve--> APPROVED (locked)
+                     └-- request changes (comment required) --> NEEDS_CORRECTION
+NEEDS_CORRECTION --owner edits, resubmits--> SUBMITTED (new version)
 ```
 
-Raw SQL added in the first migration (partial unique indexes, one key item per report):
-```sql
-CREATE UNIQUE INDEX blocker_one_key_per_report ON "Blocker" ("reportId") WHERE "isKey" = true;
-CREATE UNIQUE INDEX achievement_one_key_per_report ON "Achievement" ("reportId") WHERE "isKey" = true;
-```
+- Transitions are defined in one const map (`from -> allowed actions`). Invalid transition or editing a `SUBMITTED`/`APPROVED` report → **409**.
+- **Submit:** validate (see below) → bump `currentVersion` → write `ReportVersion` snapshot (immutable) → set `status`, `submittedAt`, and `firstSubmittedAt` only if null. One transaction.
+- **Review:** only when `SUBMITTED`. Creates `Review` pointing at the version with `versionNumber = currentVersion`. `CHANGES_REQUESTED` requires a non-blank comment (trimmed, max 2000), else 400.
+- **Concurrency:** state changes use a conditional update (`updateMany({ where: { id, status: <expected> } })`, expect `count === 1`, else 409) inside the transaction. `Review.versionId` is unique, so a version can be reviewed once.
+- **Delete:** only `DRAFT` (a draft has never been submitted by definition).
+- **Edit (`PATCH /reports/:id`):** owner only, status `DRAFT` or `NEEDS_CORRECTION`, replaces all child rows in one transaction.
 
-Snapshot JSON shape (`ReportVersion.snapshot`):
-```json
-{
-  "weekStart": "2026-09-21", "weekEnd": "2026-09-27",
-  "project": { "id": "...", "name": "..." },
-  "tasks": [{ "name": "", "priority": "", "plannedPercent": 0, "actualPercent": 0, "status": "", "plannedHours": 0, "spentHours": 0, "output": "" }],
-  "nextWeekTasks": [{ "description": "", "priority": "", "estimatedHours": 0 }],
-  "blockers": [{ "description": "", "isKey": false, "isResolved": false }],
-  "achievements": [{ "description": "", "isKey": false }],
-  "timeEntries": [{ "taskType": "DEVELOPMENT", "hours": 0 }],
-  "notes": "", "links": []
-}
-```
+## Report rules
 
-Relationships (for the ER diagram): User 1─* Report; Project 1─* Report; Project *─* User via ProjectMember; Report 1─* ReportTask / NextWeekTask / Blocker / Achievement / TimeEntry; Report 1─* ReportVersion; Report 1─* Review; ReportVersion 1─* Review; User 1─* Review (as reviewer); User 1─* ReportVersion (as submitter).
+- Fixed structure for everyone (see `docs/API.md` `ReportContent`). No customisation.
+- `weekStart` must be a Monday; `weekEnd = weekStart + 6 days` (DB CHECK as well). One report per user per week. No week after the current one. Past weeks allowed (they will count as late).
+- **Drafts save leniently:** child rows have DB defaults (`priority MEDIUM`, `status IN_PROGRESS`, percents/hours `0`), and `name`/`description` may be empty. Percents must still be 0–100 and hours ≥ 0 (DB CHECK).
+- **Submit requires:** project set and non-archived, ≥1 task, every task has non-empty name, percents 0–100, hours ≥ 0. Rows with empty descriptions in next-week/blockers/achievements are rejected at submit (or dropped; pick one and keep it consistent).
+- Max one key blocker and one key achievement per report: service check **and** partial unique index; map Prisma `P2002` to 409/400 via the exception filter.
+- DTO string limits: task name ≤ 200, output/description ≤ 1000, notes ≤ 5000, links: ≤ 20 valid http(s) URLs, max 2000 chars each. Mirror in Zod.
+- Project choice: any non-archived project (assignment via `ProjectMember` only sorts/suggests; it does not restrict). There is **no** per-task project override: workload-by-project uses `report.projectId`.
+- Project delete → 409 if any report references it (suggest archive).
 
-## 7. REST API (prefix `/api/v1`)
+## Dates, deadlines, lateness
 
-Global `JwtAuthGuard`; `@Public()` opts out. `RolesGuard` + `@Roles(...)` per route. Global `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })`.
-List endpoints return `{ data: [], meta: { page, limit, total, totalPages } }`.
+- API uses date-only strings `YYYY-MM-DD`. All week maths lives in `common/utils/week.util.ts` using luxon with `REPORT_TIMEZONE` (default `Asia/Colombo`). Never use bare `new Date()` for week logic.
+- `deadline = weekStart 00:00 (REPORT_TIMEZONE) + REPORT_DUE_OFFSET_DAYS (default 7)`.
+- Lateness uses **`Report.firstSubmittedAt`** (never overwritten on resubmit), not `submittedAt`.
+- Compliance buckets (mutually exclusive, over _active members created on or before `weekEnd`_):
+  - **onTime:** `firstSubmittedAt <= deadline`
+  - **late:** `firstSubmittedAt > deadline`, or never submitted and `now > deadline`
+  - **pending:** never submitted and `now <= deadline`
+- "Not started" = eligible active member with no report row for that week.
+- Full dashboard metric definitions: `docs/API.md`. Content aggregates (blockers, trends, hours, workload) count only reports in `SUBMITTED` or `APPROVED`, because those are the only statuses where the working copy is stable.
 
-**Auth**
-| Method | Path | Roles | Notes |
-|---|---|---|---|
-| POST | /auth/register | public | creates MEMBER |
-| POST | /auth/login | public | sets httpOnly cookie |
-| POST | /auth/logout | any | clears cookie |
-| GET | /auth/me | any | current user |
-| PATCH | /auth/me | any | update name |
-| POST | /auth/change-password | any | current + new password |
+## Backend conventions
 
-**Users**
-| Method | Path | Roles | Notes |
-|---|---|---|---|
-| GET | /users | ADMIN | paginated; filter role, isActive, search |
-| POST | /users | ADMIN | create/invite with role |
-| PATCH | /users/:id | ADMIN | change role / name / isActive |
-| DELETE | /users/:id | ADMIN | soft deactivate (cannot deactivate self) |
-| GET | /users/team | MANAGER, ADMIN | active members with basic stats |
-| GET | /users/:id/profile | MANAGER, ADMIN | member info + stats (report counts by status, on-time rate, avg hours) |
+- Global `JwtAuthGuard`; `@Public()` opts out; `RolesGuard` + `@Roles()` per route. Global `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })`.
+- Cookie `access_token`: httpOnly, SameSite=Lax, Secure in production, 1 day. `app.set('trust proxy', 1)`. Logout clears it. bcrypt cost ≥ 10. Throttle `/auth/login` and `/auth/register`. helmet on. `/health` endpoint (public).
+- Errors: one global exception filter returning `{ statusCode, message, error }`; Prisma `P2002 → 409`, `P2025 → 404`. No stack traces to clients.
+- Lists return `{ data, meta: { page, limit, total, totalPages } }`; `limit` default 20, max 100. Allow-list sort fields.
+- Aggregations: `groupBy` / `$queryRaw` with parameters only. Never string-concatenate SQL. Keep aggregation in `dashboard.service.ts`, not controllers.
+- Admin creates users with a temporary password they hand over (no email/invite flow); user changes it in settings. Never return `passwordHash`.
+- Comment non-obvious code (guards, transactions, snapshotting, aggregation queries) in 1–3 lines explaining _why_.
 
-**Projects**
-| Method | Path | Roles | Notes |
-|---|---|---|---|
-| GET | /projects | any | filter `includeArchived` |
-| POST | /projects | MANAGER, ADMIN | |
-| PATCH | /projects/:id | MANAGER, ADMIN | edit / archive |
-| DELETE | /projects/:id | MANAGER, ADMIN | 409 if referenced by reports (suggest archive) |
-| PUT | /projects/:id/members | MANAGER, ADMIN | replace assigned member ids |
+## Frontend conventions
 
-**Reports — member**
-| Method | Path | Roles | Notes |
-|---|---|---|---|
-| GET | /reports/me | MEMBER | own history; filters status, from, to; paginated |
-| POST | /reports | MEMBER | create draft for a week |
-| PATCH | /reports/:id | MEMBER (owner) | only DRAFT / NEEDS_CORRECTION; full-content replace of child rows in one transaction |
-| DELETE | /reports/:id | MEMBER (owner) | DRAFT never submitted |
-| POST | /reports/:id/submit | MEMBER (owner) | DRAFT/NEEDS_CORRECTION → SUBMITTED, writes version |
+- shadcn/ui primitives; compose into feature components. Reuse `StatusBadge`, `DataTable`, `Pagination`, `FilterBar`, `KpiCard`. One read-only `ReportView` component shared by member detail, manager detail, and review page.
+- Forms: React Hook Form + Zod mirroring backend rules; `useFieldArray` for tasks/blockers/achievements/next-week. Show server validation errors.
+- Every data view has loading, empty, and error states. Responsive down to tablet; sidebar collapses on mobile.
+- API calls only through `lib/api-client.ts` (`credentials: 'include'`, normalises errors, redirects to `/login` on 401). Query keys centralised per hook file. Invalidate relevant keys after mutations.
+- Types are hand-written in `lib/types.ts`; keep them aligned with `docs/API.md`.
 
-**Reports — shared read**
-| Method | Path | Roles | Notes |
-|---|---|---|---|
-| GET | /reports/:id | owner, MANAGER, ADMIN | full report + latest review; 404 for non-owner members |
-| GET | /reports/:id/versions | owner, MANAGER, ADMIN | list (number, submittedAt, review summary) |
-| GET | /reports/:id/versions/:n | owner, MANAGER, ADMIN | snapshot + reviews made against it |
-| GET | /reports/:id/reviews | owner, MANAGER, ADMIN | review comment history |
+## Testing
 
-**Reports — manager**
-| Method | Path | Roles | Notes |
-|---|---|---|---|
-| GET | /reports | MANAGER, ADMIN | filters: `weekStart`, `from`, `to`, `userId`, `projectId`, `status`; paginated |
-| POST | /reports/:id/review | MANAGER, ADMIN | body `{ action: APPROVED \| CHANGES_REQUESTED, comment? }`; only when SUBMITTED |
-| GET | /team/week-status | MANAGER, ADMIN | `weekStart` → each active member with status incl. NOT_STARTED |
-| GET | /team/sections | MANAGER, ADMIN | `weekStart`, `section=blockers\|achievements\|nextWeek\|notes` → side-by-side across members |
+- e2e runs against a separate DB (`TEST_DATABASE_URL`): `prisma migrate deploy` once, truncate between suites.
+- **Write tests in the same slice as the feature**, not at the end.
+- Minimum suite:
+  - MEMBER: another member's report → 404; `GET /reports`, `/dashboard/*`, `/users`, `/reports/:id/review` → 403.
+  - MANAGER: `PATCH /reports/:id` → no such capability (403/404/405, whichever the route gives); `GET` on a `DRAFT` → 404; review only when `SUBMITTED`; request changes without comment → 400.
+  - Full cycle: submit → request changes → owner edit → resubmit (version 2) → approve; each review linked to the right version.
+  - Invalid transitions and editing `SUBMITTED`/`APPROVED` → 409; double review → 409.
+  - Deactivated user's existing cookie is rejected.
+  - Non-owner sees snapshot, not working copy, while `NEEDS_CORRECTION` is being edited.
+- Unit-test `ReportWorkflowService`, `week.util` (Monday check, deadline, timezone edge), and compliance bucketing.
 
-**Dashboard (MANAGER, ADMIN)**
-| Method | Path | Returns |
-|---|---|---|
-| GET | /dashboard/summary?weekStart | total submitted, compliance (submitted/pending/late), needs-correction count, open blockers |
-| GET | /dashboard/tasks-trend?from&to&userId? | completed tasks per week (team or one person) |
-| GET | /dashboard/status-by-member?weekStart | status counts per member |
-| GET | /dashboard/workload-by-project?from&to | task count / hours per project |
-| GET | /dashboard/time-by-type?from&to | hours per task type, team-wide |
-| GET | /dashboard/activity?limit | recent submissions + review actions |
+## Environment variables
 
-**Assistant (optional, later):** `POST /assistant/chat` (MANAGER, ADMIN) — LLM with tool-use over the report queries above.
+Backend: `DATABASE_URL`, `TEST_DATABASE_URL`, `JWT_SECRET` (≥32 chars, required, no default), `JWT_EXPIRES_IN=1d`, `PORT=4000`, `NODE_ENV`, `REPORT_TIMEZONE=Asia/Colombo`, `REPORT_DUE_OFFSET_DAYS=7`, `ANTHROPIC_API_KEY` (optional slice only).
+Frontend: `BACKEND_URL`.
+Provide `.env.example` for both. Validate env at startup (fail fast). Never commit real secrets.
 
-## 8. Backend structure (NestJS)
+## Repo layout
 
 ```
 backend/
   prisma/ schema.prisma, migrations/, seed.ts
-  src/
-    main.ts, app.module.ts
-    common/  decorators/(roles, public, current-user)  guards/(jwt-auth, roles)
-             filters/  pipes/  dto/pagination.dto.ts  utils/(week.util.ts)
-    prisma/  prisma.module.ts, prisma.service.ts
-    auth/    controller, service, jwt.strategy, dto/
-    users/   controller, service, dto/
-    projects/ controller, service, dto/
-    reports/ reports.controller.ts, reports.service.ts,
-             report-workflow.service.ts, report-access.service.ts,
-             report-snapshot.service.ts, dto/
-    reviews/ reviews.controller.ts, reviews.service.ts
-    team/    controller, service
-    dashboard/ controller, service (aggregation queries)
-    assistant/ (later)
-  test/ rbac.e2e-spec.ts, workflow.e2e-spec.ts
-```
-Conventions: controllers thin (parse/validate/authorise), services hold logic, `ReportAccessService.assertCanRead/Write(user, report)` is the single RBAC choke point for report data, all multi-row writes in `prisma.$transaction`.
-
-## 9. Frontend structure (Next.js App Router)
-
-```
+  src/ main.ts, app.module.ts
+    common/ decorators/ guards/ filters/ dto/pagination.dto.ts utils/week.util.ts
+    prisma/  auth/  users/  projects/  team/  dashboard/  assistant/(optional)
+    reports/ reports.controller.ts reports.service.ts report-workflow.service.ts
+             report-access.service.ts report-snapshot.service.ts dto/
+    reviews/
+  test/ rbac.e2e-spec.ts workflow.e2e-spec.ts
 frontend/src/
-  app/
-    (auth)/login, register
-    (app)/                      # authenticated shell (sidebar layout)
-      reports/                  # MEMBER: history list
-      reports/new, reports/[id]/edit
-      reports/[id]              # read-only detail (member + manager)
-      manager/dashboard
-      manager/reports           # week view + filters + status tracker
-      manager/reports/[id]/review
-      manager/team/[userId]     # member profile
-      manager/sections          # side-by-side section comparison
-      projects                  # CRUD page
-      admin/users
-      settings
-  components/  ui/(shadcn)  layout/  report-form/(TaskTable, BlockerList, AchievementList, HoursByType)
-               report-view/  review/(ReviewPanel, VersionList, StatusBadge)
-               dashboard/(KpiCard, charts/*)  common/(DataTable, Pagination, FilterBar)
-  lib/     api-client.ts  auth.ts  week.ts  validators/(zod schemas)
-  hooks/   use-reports.ts, use-dashboard.ts, ...
-  middleware.ts
+  app/ (auth)/login,register
+       (app)/reports, reports/new, reports/[id], reports/[id]/edit,
+             manager/dashboard, manager/reports, manager/reports/[id]/review,
+             manager/team/[userId], manager/sections, projects, admin/users, settings
+  components/ ui/ layout/ report-form/ report-view/ review/ dashboard/ common/
+  lib/ api-client.ts types.ts week.ts validators/    hooks/    middleware.ts
+docs/API.md
 ```
 
-## 10. Pages (13, requirement is ≥7)
+## Progress
 
-1. Login 2. Register 3. Personal weekly report create/edit 4. Report history (member) 5. Report detail (read-only, shared) 6. Manager review page (approve / request changes, versions, comment history) 7. Manager team week view (filters + status tracker) 8. Manager dashboard (KPIs + charts + activity feed) 9. Team member profile (manager) 10. Sections side-by-side (bonus) 11. Projects management 12. User management (admin) 13. Account settings
+Each slice = backend + frontend + tests, then update this section and commit.
 
-## 11. Seed data & tests
-
-Seed (`prisma/seed.ts`, idempotent): 1 admin, 1 manager, 5 members, 5 projects (Client A, Client B, Internal Tooling, R&D, Marketing), 8 weeks of reports per member across all statuses (mostly APPROVED in older weeks; recent weeks mix SUBMITTED / NEEDS_CORRECTION / DRAFT; one member with no report this week; a few late submissions; several reports with 2–3 versions and review comments; some unresolved blockers). Demo password documented in README.
-
-Automated tests (minimum)
-- MEMBER cannot GET another member's report (404), cannot list `/reports`, cannot hit `/dashboard/*`, `/users`, `/reports/:id/review`.
-- Manager cannot PATCH report content; can only review a SUBMITTED report; request-changes without comment → 400.
-- Full cycle: submit → request changes → owner edit → resubmit (version 2) → approve.
-- Invalid transitions → 409; editing SUBMITTED/APPROVED → 409.
-
-## 12. Progress
-
-- [ ] 0. Repo scaffold: monorepo, docker-compose, env files, create Nestjs for backend and nextjs for frontend, Prisma migration
-- [ ] 1. Auth + RBAC guards + user management (admin)
+- [ ] 0. Scaffold: two packages, docker-compose (dev + test DB), env files, Prisma migration (`--create-only` + raw SQL from schema header), exception filter, health, lint/CI scripts
+- [ ] 1. Auth + guards + user management (+ RBAC e2e foundation, deactivation test)
 - [ ] 2. Projects CRUD
-- [ ] 3. Report create/edit/submit (form, tasks table, blockers, achievements, hours)
-- [ ] 4. Report history + detail page
-- [ ] 5. Review workflow + versions + manager review page
-- [ ] 6. Seed script
-- [ ] 7. Team week view, filters, member profile, sections view
-- [ ] 8. Dashboard KPIs + charts + activity feed
-- [ ] 9. RBAC + workflow e2e tests
-- [ ] 10. README, deployment
-- [ ] 11. (Optional) AI assistant
+- [ ] 3a. Reports backend: create/edit/submit/delete, snapshot, validation, access service (+ tests)
+- [ ] 3b. Report form UI (tasks table, blockers, achievements, hours, notes) + history + detail
+- [ ] 4. Review workflow + versions + manager review page (+ full-cycle e2e)
+- [ ] 5. Seed script (needed before dashboard work)
+- [ ] 6. Team week view, filters, status tracker, member profile, sections view
+- [ ] 7. Dashboard KPIs + charts + activity feed
+- [ ] 8. README (install/run frontend/backend/DB, demo credentials), deployment, ER diagram image generated from `schema.prisma`
+- [ ] 9. (Optional) AI assistant: tool-use over existing services, manager/admin only, never raw SQL, send minimal fields, no emails/passwords to the LLM, document approach and privacy
 
-## 13. Decisions log
+Seed (idempotent): 1 admin, 1 manager, 5 members, 5 projects (Client A, Client B, Internal Tooling, R&D, Marketing), 8 weeks per member across all statuses (older mostly APPROVED; recent mixed), one member with no report this week, some late submissions, several reports with 2–3 versions and review comments, some unresolved blockers. Create versions/reviews with explicit timestamps.
 
-- Next.js used as UI only; single backend = NestJS; `/api` proxied via rewrites.
-- Only MEMBER role writes reports; managers/admins only review and analyse.
-- One report per member per week; one project tag per report, optional per-task project override for the workload chart (falls back to report project).
-- Working copy is normalised; every submit also writes an immutable JSON snapshot (`ReportVersion`); each `Review` points to the version it was made against.
-- Manager visibility: all active members (no manager→team hierarchy).
-- Member accessing someone else's report gets 404, not 403.
-- Open blockers metric = unresolved blockers on non-draft reports of the selected week.
-- Late = not submitted by end of Sunday of the report week (constant, easy to change).
-- Single JWT httpOnly cookie (1 day) for sessions; refresh tokens deferred.
-- Projects: archive preferred; hard delete only when unreferenced.
+## Decisions log (non-obvious ones only)
 
-## 14. Working agreement for Claude sessions
+- Managers/non-owners always see the `currentVersion` snapshot; drafts invisible to managers.
+- `Report.firstSubmittedAt` added so lateness survives resubmits.
+- `Review.versionId` unique: one review per version.
+- No per-task project override; no invite flow; no refresh tokens (1-day JWT, DB check per request).
+- Hours stored as `Float`, validated to 0.25 steps in UI; round to 2 decimals in aggregates.
+- Dashboard content aggregates exclude `DRAFT` and `NEEDS_CORRECTION`.
+- No workspaces; luxon for week maths.
 
-- Implement one slice per request, backend + frontend + tests together, matching this file exactly.
-- Return **complete files with paths**; no partial snippets unless asked.
-- If a change contradicts this file, say so and propose the update to PROJECT.md first.
-- Explain non-obvious code (guards, transactions, snapshotting, aggregation queries) briefly so I can defend it in a live coding round.
+## Working agreement
+
+- Work **one slice at a time**. Plan first in a few lines, then implement. Commit per slice (conventional commits).
+- Edit files directly; don't paste whole files into chat. Summarise what changed and anything non-obvious (guards, transactions, snapshots, aggregation SQL) in a few lines so it can be defended live.
+- If a request contradicts this file, say so and propose the CLAUDE.md edit **before** coding.
+- Don't add dependencies, features, or abstractions beyond what a slice needs. Ask before adding a new library.
+- Don't weaken a security rule or skip a test to make something pass. Fix the cause.
