@@ -14,21 +14,22 @@ Treat this as a real client project: production-quality, secure, tested, explain
 - **Backend:** NestJS (REST, prefix `/api/v1`), TypeScript, class-validator/class-transformer, Swagger, Prisma + PostgreSQL, bcrypt, JWT (httpOnly cookie), `@nestjs/throttler`, helmet, luxon
 - **Frontend:** Next.js App Router, TypeScript, Tailwind, shadcn/ui, React Hook Form + Zod, TanStack Query, Recharts
 - **Tests**: Vitest (backend unit and e2e tests; Supertest for HTTP e2e tests), optional Vitest/RTL for the report form
-- **Infra:** docker-compose (Postgres dev + test DB), Vercel (frontend), Railway/Render (backend + DB)
+- **Infra:** docker-compose (Postgres dev DB; no local test DB service), Vercel (frontend), Railway/Render (backend + DB)
 - **Repo:** two independent packages (`backend/`, `frontend/`) in one git repo. **No npm/pnpm workspaces.** Use npm.
 - Pin the Prisma major version at scaffold time and don't upgrade mid-project. If the installed Prisma version needs different generator/datasource config than `schema.prisma` shows, adapt the config only, never the models.
 
 ## Commands (create these scripts in slice 0; keep this list accurate)
 
 ```
-docker compose up -d                       # postgres (dev) + postgres-test
-cd backend  && npm run start:dev           # API on :4000
-cd backend  && npx prisma migrate dev      # new migration (use --create-only when adding raw SQL)
+docker compose up -d postgres              # local development database
+cd backend  && npm run start:dev           # API on :3001
+cd backend  && npm run prisma:migrate:dev -- --name user-table  # use --create-only when adding raw SQL
 cd backend  && npm run seed                # idempotent seed
 cd backend  && npm test                    # unit
 cd backend  && npm run test:e2e            # e2e against TEST_DATABASE_URL
 cd frontend && npm run dev                 # UI on :3000
-cd frontend && npm run lint && npm run typecheck
+cd backend  && npm run format:check && npm run lint && npm run build
+cd frontend && npm run format:check && npm run lint && npm run typecheck && npm run build
 ```
 
 Before saying a slice is done: lint, typecheck, build, and tests must pass for every package you touched.
@@ -139,7 +140,7 @@ NEEDS_CORRECTION --owner edits, resubmits--> SUBMITTED (new version)
 
 ## Environment variables
 
-Backend: `DATABASE_URL`, `TEST_DATABASE_URL`, `JWT_SECRET` (≥32 chars, required, no default), `JWT_EXPIRES_IN=1d`, `PORT=4000`, `NODE_ENV`, `REPORT_TIMEZONE=Asia/Colombo`, `REPORT_DUE_OFFSET_DAYS=7`, `ANTHROPIC_API_KEY` (optional slice only).
+Backend: `DATABASE_URL`, `TEST_DATABASE_URL`, `JWT_SECRET` (≥32 chars, required, no default), `JWT_EXPIRES_IN=1d`, `PORT=3001`, `NODE_ENV`, `REPORT_TIMEZONE=Asia/Colombo`, `REPORT_DUE_OFFSET_DAYS=7`, `ANTHROPIC_API_KEY` (optional slice only).
 Frontend: `BACKEND_URL`.
 Provide `.env.example` for both. Validate env at startup (fail fast). Never commit real secrets.
 
@@ -169,7 +170,7 @@ docs/API.md
 
 Each slice = backend + frontend + tests, then update this section and commit.
 
-- [ ] 0. Scaffold: two packages, docker-compose (dev + test DB), env files, Prisma migration (`--create-only` + raw SQL from schema header), exception filter, health, lint/CI scripts
+- [ ] 0. Scaffold: two packages, docker-compose (dev DB only), env files, Prisma migration for current schema (add raw SQL constraints when required), exception filter, health, lint/CI scripts
 - [ ] 1. Auth + guards + user management (+ RBAC e2e foundation, deactivation test)
 - [ ] 2. Projects CRUD
 - [ ] 3a. Reports backend: create/edit/submit/delete, snapshot, validation, access service (+ tests)
