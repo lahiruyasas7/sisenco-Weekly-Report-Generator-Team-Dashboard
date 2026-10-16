@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: sisenco-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sisenco
+      POSTGRES_PASSWORD: sisenco123
+      POSTGRES_DB: sisenco
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+
+volumes:
+  postgres_data:
