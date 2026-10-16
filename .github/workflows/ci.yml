@@ -52,6 +52,10 @@ jobs:
         working-directory: backend
         run: npm run prisma:generate
 
+      - name: Check backend formatting
+        working-directory: backend
+        run: npm run format:check
+
       - name: Lint backend
         working-directory: backend
         run: npm run lint
@@ -79,6 +83,7 @@ jobs:
     timeout-minutes: 15
     env:
       NEXT_TELEMETRY_DISABLED: 1
+      BACKEND_URL: http://localhost:3001
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -93,6 +98,10 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: Check frontend formatting
+        working-directory: frontend
+        run: npm run format:check
 
       - name: Lint frontend
         working-directory: frontend
