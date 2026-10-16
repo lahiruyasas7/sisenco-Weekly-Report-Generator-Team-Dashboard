@@ -34,6 +34,7 @@ dist/
 build/
 *.tsbuildinfo
 next-env.d.ts
+backend/src/generated/prisma/
 
 # ==============================================================================
 # Testing & Coverage
