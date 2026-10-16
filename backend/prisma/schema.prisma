@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// enum Role         { MEMBER MANAGER ADMIN }
+// enum ReportStatus { DRAFT SUBMITTED NEEDS_CORRECTION APPROVED }
+// enum Priority     { LOW MEDIUM HIGH CRITICAL }
+// enum TaskStatus   { COMPLETED IN_PROGRESS BLOCKED DEFERRED }
+// enum TaskType     { DEVELOPMENT TESTING MEETINGS DOCUMENTATION DESIGN OTHER }
+// enum ReviewAction { APPROVED CHANGES_REQUESTED }
+
+// model User {
+//   id           String   @id @default(uuid())
+//   email        String   @unique
+//   name         String
+//   passwordHash String
+//   role         Role     @default(MEMBER)
+//   isActive     Boolean  @default(true)
+//   createdAt    DateTime @default(now())
+//   updatedAt    DateTime @updatedAt
+
+//   reports            Report[]
+//   reviews            Review[]
+//   versionsSubmitted  ReportVersion[]
+//   projectMemberships ProjectMember[]
+// }
+
+// model Project {
+//   id          String   @id @default(uuid())
+//   name        String   @unique
+//   description String?
+//   color       String?
+//   isArchived  Boolean  @default(false)
+//   createdAt   DateTime @default(now())
+//   updatedAt   DateTime @updatedAt
+
+//   members ProjectMember[]
+//   reports Report[]
+//   tasks   ReportTask[]
+// }
+
+// model ProjectMember {
+//   projectId String
+//   userId    String
+//   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+//   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+//   @@id([projectId, userId])
+// }
+
+// model Report {
+//   id             String       @id @default(uuid())
+//   userId         String
+//   projectId      String
+//   weekStart      DateTime     @db.Date
+//   weekEnd        DateTime     @db.Date
+//   status         ReportStatus @default(DRAFT)
+//   currentVersion Int          @default(0)   // latest submitted version number, 0 = never submitted
+//   notes          String?
+//   links          String[]
+//   submittedAt    DateTime?                  // latest submission time
+//   reviewedAt     DateTime?                  // latest review time
+//   createdAt      DateTime     @default(now())
+//   updatedAt      DateTime     @updatedAt
+
+//   user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+//   project  Project   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+//   tasks         ReportTask[]
+//   nextWeekTasks NextWeekTask[]
+//   blockers      Blocker[]
+//   achievements  Achievement[]
+//   timeEntries   TimeEntry[]
+//   versions      ReportVersion[]
+//   reviews       Review[]
+
+//   @@unique([userId, weekStart])
+//   @@index([status])
+//   @@index([weekStart])
+//   @@index([projectId])
+// }
+
+// model ReportTask {
+//   id             String     @id @default(uuid())
+//   reportId       String
+//   projectId      String?                       // optional override; falls back to report.projectId
+//   position       Int
+//   name           String
+//   priority       Priority
+//   plannedPercent Int                           // 0-100
+//   actualPercent  Int                           // 0-100
+//   status         TaskStatus
+//   plannedHours   Float
+//   spentHours     Float
+//   output         String?
+
+//   report  Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+//   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+//   @@index([reportId])
+// }
+
+// model NextWeekTask {
+//   id             String   @id @default(uuid())
+//   reportId       String
+//   position       Int
+//   description    String
+//   priority       Priority @default(MEDIUM)
+//   estimatedHours Float?
+
+//   report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+//   @@index([reportId])
+// }
+
+// model Blocker {
+//   id          String  @id @default(uuid())
+//   reportId    String
+//   position    Int
+//   description String
+//   isKey       Boolean @default(false)
+//   isResolved  Boolean @default(false)
+
+//   report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+//   @@index([reportId])
+// }
+
+// model Achievement {
+//   id          String  @id @default(uuid())
+//   reportId    String
+//   position    Int
+//   description String
+//   isKey       Boolean @default(false)
+
+//   report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+//   @@index([reportId])
+// }
+
+// model TimeEntry {
+//   id       String   @id @default(uuid())
+//   reportId String
+//   taskType TaskType
+//   hours    Float
+
+//   report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+//   @@unique([reportId, taskType])
+// }
+
+// model ReportVersion {
+//   id            String   @id @default(uuid())
+//   reportId      String
+//   versionNumber Int
+//   snapshot      Json                          // full report content at submit time (see shape below)
+//   submittedById String
+//   submittedAt   DateTime @default(now())
+
+//   report      Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+//   submittedBy User   @relation(fields: [submittedById], references: [id])
+//   reviews     Review[]
+
+//   @@unique([reportId, versionNumber])
+// }
+
+// model Review {
+//   id         String       @id @default(uuid())
+//   reportId   String
+//   versionId  String                            // the version this review was made against
+//   reviewerId String
+//   action     ReviewAction
+//   comment    String?                           // required when CHANGES_REQUESTED, optional on APPROVED
+//   createdAt  DateTime     @default(now())
+
+//   report   Report        @relation(fields: [reportId], references: [id], onDelete: Cascade)
+//   version  ReportVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+//   reviewer User          @relation(fields: [reviewerId], references: [id])
+
+//   @@index([reportId])
+//   @@index([createdAt])
+// }
