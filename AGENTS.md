@@ -13,7 +13,7 @@ Treat this as a real client project: production-quality, secure, tested, explain
 
 - **Backend:** NestJS (REST, prefix `/api/v1`), TypeScript, class-validator/class-transformer, Swagger, Prisma + PostgreSQL, bcrypt, JWT (httpOnly cookie), `@nestjs/throttler`, helmet, luxon
 - **Frontend:** Next.js App Router, TypeScript, Tailwind, shadcn/ui, React Hook Form + Zod, TanStack Query, Recharts
-- **Tests:** Jest + Supertest (backend e2e + unit), optional Vitest/RTL for the report form
+- **Tests**: Vitest (backend unit and e2e tests; Supertest for HTTP e2e tests), optional Vitest/RTL for the report form
 - **Infra:** docker-compose (Postgres dev + test DB), Vercel (frontend), Railway/Render (backend + DB)
 - **Repo:** two independent packages (`backend/`, `frontend/`) in one git repo. **No npm/pnpm workspaces.** Use npm.
 - Pin the Prisma major version at scaffold time and don't upgrade mid-project. If the installed Prisma version needs different generator/datasource config than `schema.prisma` shows, adapt the config only, never the models.
