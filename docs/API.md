@@ -33,6 +33,8 @@ Snapshots are written only by `ReportSnapshotService` at submit time and are imm
 | PATCH | /auth/me | any | update name |
 | POST | /auth/change-password | any | current + new password |
 
+Registration always assigns `MEMBER`; role assignment is restricted to admins. Login returns the public user and sets an HttpOnly cookie backed by a revocable database session. Logout and password changes revoke sessions. Admin-created users must change their temporary password before accessing other protected routes.
+
 ## Users
 | Method | Path | Roles | Notes |
 |---|---|---|---|
