@@ -24,6 +24,7 @@ Treat this as a real client project: production-quality, secure, tested, explain
 docker compose up -d postgres              # local development database
 cd backend  && npm run start:dev           # API on :3001
 cd backend  && npm run prisma:migrate:dev -- --name user-table  # after schema models exist; use --create-only when adding raw SQL
+cd backend  && npm run seed                # create the first admin from INITIAL_ADMIN_* values
 cd backend  && npm test                    # unit
 cd backend  && npm run test:e2e            # CI uses an isolated PostgreSQL service; locally set DATABASE_URL to a disposable database
 cd frontend && npm run dev                 # UI on :3000
@@ -109,11 +110,12 @@ NEEDS_CORRECTION --owner edits, resubmits--> SUBMITTED (new version)
 ## Backend conventions
 
 - Global `JwtAuthGuard`; `@Public()` opts out; `RolesGuard` + `@Roles()` per route. Global `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })`.
-- Cookie `access_token`: httpOnly, SameSite=Lax, Secure in production, 1 day. `app.set('trust proxy', 1)`. Logout clears it. bcrypt cost ≥ 10. Throttle `/auth/login` and `/auth/register`. helmet on. `/health` endpoint (public).
+- Public registration always creates a MEMBER; the initial ADMIN is provisioned only by the idempotent seed command. Roles are loaded from the DB on each request, never trusted from the JWT.
+- Cookie `access_token`: httpOnly, SameSite=Lax, Secure in production, 1 day. Back it with revocable DB sessions so logout, password change, and account deactivation invalidate existing tokens. Validate browser Origin/Referer for state-changing requests. `app.set('trust proxy', 1)`. bcrypt cost ≥ 10 with the 72-byte input limit. Throttle `/auth/login` and `/auth/register`. helmet on. `/health` endpoint (public).
 - Errors: one global exception filter returning `{ statusCode, message, error }`; Prisma `P2002 → 409`, `P2025 → 404`. No stack traces to clients.
 - Lists return `{ data, meta: { page, limit, total, totalPages } }`; `limit` default 20, max 100. Allow-list sort fields.
 - Aggregations: `groupBy` / `$queryRaw` with parameters only. Never string-concatenate SQL. Keep aggregation in `dashboard.service.ts`, not controllers.
-- Admin creates users with a temporary password they hand over (no email/invite flow); user changes it in settings. Never return `passwordHash`.
+- Admin creates users with a temporary password they hand over (no email/invite flow); the account must change it before accessing other protected routes. Never return `passwordHash`.
 - Comment non-obvious code (guards, transactions, snapshotting, aggregation queries) in 1–3 lines explaining _why_.
 
 ## Frontend conventions
@@ -139,7 +141,7 @@ NEEDS_CORRECTION --owner edits, resubmits--> SUBMITTED (new version)
 
 ## Environment variables
 
-Backend: `DATABASE_URL`, `JWT_SECRET` (≥32 chars, required, no default), `JWT_EXPIRES_IN=1d`, `PORT=3001`, `NODE_ENV`, `REPORT_TIMEZONE=Asia/Colombo`, `REPORT_DUE_OFFSET_DAYS=7`, `ANTHROPIC_API_KEY` (optional slice only).
+Backend: `DATABASE_URL`, `JWT_SECRET` (≥32 bytes, required, no default), `FRONTEND_ORIGIN`, `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_NAME`, `INITIAL_ADMIN_PASSWORD` (seed command only), `PORT=3001`, `NODE_ENV`, `REPORT_TIMEZONE=Asia/Colombo`, `REPORT_DUE_OFFSET_DAYS=7`, `ANTHROPIC_API_KEY` (optional slice only).
 Frontend: `BACKEND_URL`.
 Provide `.env.example` for both. Validate env at startup (fail fast). Never commit real secrets.
 
