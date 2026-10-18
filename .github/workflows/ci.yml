@@ -33,6 +33,8 @@ jobs:
     env:
       NODE_ENV: test
       DATABASE_URL: postgresql://sisenco:ci_password@localhost:5432/sisenco_test?schema=public
+      JWT_SECRET: ci-only-secret-that-is-at-least-32-bytes-long
+      FRONTEND_ORIGIN: http://localhost:3000
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

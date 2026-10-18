@@ -12,6 +12,7 @@ enum Role {
   MANAGER
   ADMIN
 }
+
 // enum ReportStatus { DRAFT SUBMITTED NEEDS_CORRECTION APPROVED }
 // enum Priority     { LOW MEDIUM HIGH CRITICAL }
 // enum TaskStatus   { COMPLETED IN_PROGRESS BLOCKED DEFERRED }
@@ -19,19 +20,34 @@ enum Role {
 // enum ReviewAction { APPROVED CHANGES_REQUESTED }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  name         String
-  passwordHash String
-  role         Role     @default(MEMBER)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                 String        @id @default(uuid())
+  email              String        @unique
+  name               String
+  passwordHash       String
+  role               Role          @default(MEMBER)
+  isActive           Boolean       @default(true)
+  mustChangePassword Boolean       @default(false)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  sessions           UserSession[]
 
   // reports            Report[]
   // reviews            Review[]
   // versionsSubmitted  ReportVersion[]
   // projectMemberships ProjectMember[]
+}
+
+model UserSession {
+  id        String    @id @default(uuid())
+  userId    String
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
 }
 
 // model Project {
