@@ -20,7 +20,8 @@ export class RegisterDto {
   name!: string;
 
   @IsString()
-  @Length(12, 128, { message: 'Password must be 12–128 characters long.' })
+  @Length(12, 72, { message: 'Password must be 12–72 characters long.' })
+  @IsByteLength(12, 72)
   @Matches(/^(?!\s+$)/, { message: 'Password cannot be only whitespace.' })
   password: string;
 }
