@@ -28,6 +28,8 @@ cd backend  && npm run seed                # create the first admin from INITIAL
 cd backend  && npm test                    # unit
 cd backend  && npm run test:e2e            # CI uses an isolated PostgreSQL service; locally set DATABASE_URL to a disposable database
 cd frontend && npm run dev                 # UI on :3000
+cd frontend && npm test                    # frontend Vitest suite
+cd frontend && npm run test:watch          # frontend Vitest watch mode
 cd backend  && npm run format:check && npm run lint && npm run build
 cd frontend && npm run format:check && npm run lint && npm run typecheck && npm run build
 ```
@@ -157,7 +159,7 @@ backend/
              report-access.service.ts report-snapshot.service.ts dto/
     reviews/
   test/ rbac.e2e-spec.ts workflow.e2e-spec.ts
-frontend/src/
+frontend/
   app/ (auth)/login,register
        (app)/reports, reports/new, reports/[id], reports/[id]/edit,
              manager/dashboard, manager/reports, manager/reports/[id]/review,
