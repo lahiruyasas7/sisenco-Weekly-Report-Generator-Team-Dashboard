@@ -40,7 +40,7 @@ Before saying a slice is done: lint, typecheck, build, and tests must pass for e
 - Browser calls `/api/v1/*` on the Next origin; `next.config.js` rewrites to `BACKEND_URL`. One origin, so no CORS and cookies just work.
 - Frontend data fetching is client-side TanStack Query. Server components only for static layout.
 - if need to handle client states use zustand
-- `middleware.ts` is **UX only**: redirect when the cookie is missing, decode the role with `jose` (no verification) to redirect MEMBER away from `/manager/*` and non-ADMIN away from `/admin/*`. Backend guards are the real security boundary. Never trust the frontend role.
+- `middleware.ts` is **UX only**: redirect to `/login` when the auth cookie is missing. Do not decode a role from the JWT or add a role claim for frontend routing. A client auth boundary uses TanStack Query with `GET /auth/me` to redirect MEMBER away from `/manager/*` and non-ADMIN away from `/admin/*`; the role comes from the database-backed API response. Backend guards are the real security boundary, so never rely on frontend role checks for authorization.
 - Controllers are thin (parse, validate, authorise, delegate). Services hold logic. All multi-row writes use `prisma.$transaction`.
 - No `any`. No business logic in React components (put it in hooks / `lib/`).
 
