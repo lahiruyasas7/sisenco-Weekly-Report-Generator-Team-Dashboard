@@ -28,6 +28,8 @@ cd backend  && npm run seed                # create the first admin from INITIAL
 cd backend  && npm test                    # unit
 cd backend  && npm run test:e2e            # CI uses an isolated PostgreSQL service; locally set DATABASE_URL to a disposable database
 cd frontend && npm run dev                 # UI on :3000
+cd frontend && npm test                    # frontend Vitest suite
+cd frontend && npm run test:watch          # frontend Vitest watch mode
 cd backend  && npm run format:check && npm run lint && npm run build
 cd frontend && npm run format:check && npm run lint && npm run typecheck && npm run build
 ```
