@@ -157,7 +157,7 @@ backend/
              report-access.service.ts report-snapshot.service.ts dto/
     reviews/
   test/ rbac.e2e-spec.ts workflow.e2e-spec.ts
-frontend/src/
+frontend/
   app/ (auth)/login,register
        (app)/reports, reports/new, reports/[id], reports/[id]/edit,
              manager/dashboard, manager/reports, manager/reports/[id]/review,
