@@ -85,6 +85,7 @@ export function useChangePassword() {
       apiRequest<void>('/auth/change-password', {
         method: 'POST',
         body: input,
+        redirectOnUnauthorized: false,
       }),
     onSuccess: () => {
       queryClient.clear();
