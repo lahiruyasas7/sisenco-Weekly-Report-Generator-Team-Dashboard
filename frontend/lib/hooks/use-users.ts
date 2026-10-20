@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api-client';
+import { authQueryKeys } from '@/lib/hooks/use-auth';
 import type {
   CreateUserInput,
   PaginatedResponse,
@@ -78,8 +79,20 @@ export function useUpdateUser() {
         method: 'PATCH',
         body: input,
       }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: userQueryKeys.lists() }),
+    onSuccess: (user) => {
+      const invalidateLists = queryClient.invalidateQueries({
+        queryKey: userQueryKeys.lists(),
+      });
+      const currentUser = queryClient.getQueryData<PublicUser>(
+        authQueryKeys.currentUser(),
+      );
+
+      if (currentUser?.id === user.id) {
+        queryClient.setQueryData(authQueryKeys.currentUser(), user);
+      }
+
+      return invalidateLists;
+    },
   });
 }
 

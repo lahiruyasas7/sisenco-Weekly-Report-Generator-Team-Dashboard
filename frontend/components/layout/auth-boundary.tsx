@@ -20,7 +20,7 @@ export function AuthBoundary({ children }: { children: React.ReactNode }) {
     }
   }, [redirectTo, router]);
 
-  if (currentUser.isError) {
+  if (currentUser.isError && !currentUser.data) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#f6f7f5] px-5 font-sans text-sm text-[#66716d]">
         <div className="text-center">
@@ -38,7 +38,7 @@ export function AuthBoundary({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (currentUser.isLoading || currentUser.isFetching || !currentUser.data) {
+  if (currentUser.isLoading || !currentUser.data) {
     return (
       <main
         className="flex min-h-screen items-center justify-center bg-[#f6f7f5] px-5 font-sans text-sm text-[#66716d]"

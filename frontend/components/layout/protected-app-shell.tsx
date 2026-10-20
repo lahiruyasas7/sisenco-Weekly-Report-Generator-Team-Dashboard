@@ -1,6 +1,7 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useLogout } from '@/lib/hooks/use-auth';
 import type { PublicUser } from '@/lib/types';
@@ -13,6 +14,7 @@ export function ProtectedAppShell({
   user: PublicUser;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const logout = useLogout();
   const [logoutError, setLogoutError] = useState('');
 
@@ -37,6 +39,36 @@ export function ProtectedAppShell({
           <span className="text-sm font-semibold text-[#08796f]">
             Weekly Reports
           </span>
+          <nav
+            aria-label="Main navigation"
+            className="flex items-center gap-3 text-sm sm:gap-5"
+          >
+            {[
+              { href: '/', label: 'Home' },
+              { href: '/settings', label: 'Settings' },
+              ...(user.role === 'ADMIN'
+                ? [{ href: '/admin/users', label: 'Users' }]
+                : []),
+            ].map(({ href, label }) => {
+              const isCurrent =
+                href === '/' ? pathname === '/' : pathname.startsWith(href);
+
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={isCurrent ? 'page' : undefined}
+                  className={
+                    isCurrent
+                      ? 'font-semibold text-[#08796f]'
+                      : 'text-[#545f5b] hover:text-[#08796f]'
+                  }
+                >
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
           <div className="flex items-center gap-4">
             <div className="hidden text-right sm:block">
               <p className="text-sm font-medium">{user.name}</p>

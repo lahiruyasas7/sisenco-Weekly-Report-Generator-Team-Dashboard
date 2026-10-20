@@ -18,12 +18,11 @@ export function useCurrentUser() {
     queryKey: authQueryKeys.currentUser(),
     queryFn: () => apiRequest<PublicUser>('/auth/me'),
     retry: false,
+    staleTime: 60_000,
   });
 }
 
 export function useLogin() {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: (input: LoginInput) =>
       apiRequest<PublicUser>('/auth/login', {
@@ -31,9 +30,6 @@ export function useLogin() {
         body: input,
         redirectOnUnauthorized: false,
       }),
-    onSuccess: (user) => {
-      queryClient.setQueryData(authQueryKeys.currentUser(), user);
-    },
   });
 }
 
