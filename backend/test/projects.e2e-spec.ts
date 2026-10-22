@@ -275,6 +275,19 @@ describe('Projects API (e2e)', () => {
       });
 
     await request(app.getHttpServer())
+      .get(`${API}/projects/${project.id}/members`)
+      .set('Cookie', memberCookie)
+      .expect(403);
+    await request(app.getHttpServer())
+      .get(`${API}/projects/${project.id}/members`)
+      .set('Cookie', managerCookie)
+      .expect(200)
+      .expect({
+        projectId: project.id,
+        memberIds: [member.id, secondMember.id],
+      });
+
+    await request(app.getHttpServer())
       .put(`${API}/projects/${project.id}/members`)
       .set('Cookie', managerCookie)
       .send({ memberIds: [member.id, inactiveMember.id] })
@@ -295,9 +308,15 @@ describe('Projects API (e2e)', () => {
       .set('Cookie', memberCookie)
       .expect(200);
     const assignedProject = (
-      memberProjects.body.data as { id: string; isAssigned: boolean }[]
+      memberProjects.body.data as {
+        id: string;
+        isAssigned: boolean;
+        memberCount: number;
+        reportCount: number;
+      }[]
     ).find(({ id }) => id === project.id);
     expect(assignedProject?.isAssigned).toBe(true);
+    expect(assignedProject).toMatchObject({ memberCount: 2, reportCount: 0 });
 
     await request(app.getHttpServer())
       .put(`${API}/projects/${project.id}/members`)
