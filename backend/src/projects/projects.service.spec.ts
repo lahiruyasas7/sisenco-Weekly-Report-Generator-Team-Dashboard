@@ -22,6 +22,7 @@ function setup() {
   };
   const prismaMock = {
     project: {
+      findUnique: vi.fn(),
       findMany: vi.fn(),
       count: vi.fn(),
       create: vi.fn(),
@@ -57,6 +58,7 @@ describe('ProjectsService', () => {
         isArchived: false,
         createdAt: new Date('2026-01-01T00:00:00Z'),
         updatedAt: new Date('2026-01-01T00:00:00Z'),
+        _count: { members: 3, reports: 18 },
         members: [{ userId: 'member-1' }],
       },
       {
@@ -67,6 +69,7 @@ describe('ProjectsService', () => {
         isArchived: false,
         createdAt: new Date('2026-01-01T00:00:00Z'),
         updatedAt: new Date('2026-01-01T00:00:00Z'),
+        _count: { members: 0, reports: 0 },
         members: [],
       },
     ]);
@@ -82,6 +85,7 @@ describe('ProjectsService', () => {
       true,
       false,
     ]);
+    expect(result.data[0]).toMatchObject({ memberCount: 3, reportCount: 18 });
     expect(result.data[0]).not.toHaveProperty('members');
     expect(result.meta).toEqual({
       page: 1,
@@ -125,6 +129,19 @@ describe('ProjectsService', () => {
         select: { id: true, name: true },
       }),
     );
+  });
+
+  it('returns the current project member IDs for the editor', async () => {
+    const { service, prismaMock } = setup();
+    prismaMock.project.findUnique.mockResolvedValue({
+      id: 'project-1',
+      members: [{ userId: 'member-1' }, { userId: 'member-2' }],
+    });
+
+    await expect(service.assignedMemberIds('project-1')).resolves.toEqual({
+      projectId: 'project-1',
+      memberIds: ['member-1', 'member-2'],
+    });
   });
 
   it('maps a case-insensitive unique-name violation to 409', async () => {
