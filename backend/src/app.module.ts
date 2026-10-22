@@ -14,6 +14,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from './auth/guards/roles.guard.js';
 import { SameOriginGuard } from './auth/guards/same-origin.guard.js';
 import { PasswordChangeGuard } from './auth/guards/password-change.guard.js';
+import { ProjectsModule } from './projects/projects.module.js';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { PasswordChangeGuard } from './auth/guards/password-change.guard.js';
     PrismaModule,
     AuthModule,
     UsersModule,
+    ProjectsModule,
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
   ],
   controllers: [AppController, HealthController],
