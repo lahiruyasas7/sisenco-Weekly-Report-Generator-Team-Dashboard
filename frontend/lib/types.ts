@@ -1,5 +1,36 @@
 export type UserRole = 'MEMBER' | 'MANAGER' | 'ADMIN';
 
+export type Project = {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string | null;
+  isArchived: boolean;
+  createdAt: string;
+  updatedAt: string;
+  isAssigned: boolean;
+  memberCount: number;
+  reportCount: number;
+};
+
+export type AssignableMember = Pick<PublicUser, 'id' | 'name'>;
+
+export type ProjectListParams = {
+  page?: number;
+  limit?: number;
+  includeArchived?: boolean;
+};
+
+export type CreateProjectInput = {
+  name: string;
+  description?: string | null;
+  color?: string | null;
+};
+
+export type UpdateProjectInput = Partial<CreateProjectInput> & {
+  isArchived?: boolean;
+};
+
 export type PublicUser = {
   id: string;
   email: string;
