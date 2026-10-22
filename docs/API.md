@@ -50,8 +50,9 @@ On-time rate = reports with `firstSubmittedAt <= deadline` / reports with `first
 ## Projects
 | Method | Path | Roles | Notes |
 |---|---|---|---|
-| GET | /projects | any | Paginated; `includeArchived`; each item includes `isAssigned` for the caller |
+| GET | /projects | any | Paginated; `includeArchived`; each item includes `isAssigned` for the caller, plus `memberCount` and `reportCount` |
 | GET | /projects/assignable-members | MANAGER, ADMIN | Active MEMBER accounts available for project assignment |
+| GET | /projects/:id/members | MANAGER, ADMIN | Current assigned member IDs for the project editor |
 | POST | /projects | MANAGER, ADMIN | Create a project |
 | PATCH | /projects/:id | MANAGER, ADMIN | Update project fields or archive/unarchive |
 | DELETE | /projects/:id | MANAGER, ADMIN | 409 if referenced by reports |
@@ -59,7 +60,7 @@ On-time rate = reports with `firstSubmittedAt <= deadline` / reports with `first
 
 Project fields are `id`, `name`, `description`, `color`, `isArchived`, `createdAt`, and `updatedAt`. `name` is required, trimmed before storage, and unique without regard to case. `description` and `color` are optional and nullable. New projects start with `isArchived: false`; only PATCH changes archive state. A name conflict returns 409.
 
-`GET /projects` accepts `page` (default 1), `limit` (default 20, maximum 100), and `includeArchived` (default false). `includeArchived=true` includes archived projects; otherwise they are excluded. Every item contains the project fields and `isAssigned`, which is true when the authenticated caller has a `ProjectMember` row for that project. `isAssigned` is informational and never restricts report project selection or access. Any authenticated role can list projects.
+`GET /projects` accepts `page` (default 1), `limit` (default 20, maximum 100), and `includeArchived` (default false). `includeArchived=true` includes archived projects; otherwise they are excluded. Every item contains the project fields, `isAssigned`, `memberCount` (assigned member count), and `reportCount` (reports referencing the project). `isAssigned` is true when the authenticated caller has a `ProjectMember` row for that project; it is informational and never restricts report project selection or access. Any authenticated role can list projects.
 
 Paginated response:
 
@@ -74,7 +75,9 @@ Paginated response:
       "isArchived": false,
       "createdAt": "2026-10-22T08:00:00.000Z",
       "updatedAt": "2026-10-22T08:00:00.000Z",
-      "isAssigned": true
+      "isAssigned": true,
+      "memberCount": 3,
+      "reportCount": 18
     }
   ],
   "meta": { "page": 1, "limit": 20, "total": 1, "totalPages": 1 }
@@ -86,6 +89,8 @@ Paginated response:
 `PUT /projects/:id/members` accepts `{ "memberIds": ["member-id-1", "member-id-2"] }` and replaces the complete assignment list atomically. Every ID must be a unique ID of an existing, active MEMBER account. Duplicate IDs, malformed IDs, or IDs for inactive/non-MEMBER accounts return 400. An empty array removes all assignments. The endpoint is restricted to MANAGER and ADMIN.
 
 `GET /projects/assignable-members` returns the active MEMBER accounts managers/admins may assign, as `{ "data": [{ "id": "member-id", "name": "Member Name" }] }`. It does not expose inactive accounts or other roles.
+
+`GET /projects/:id/members` returns `{ "projectId": "project-id", "memberIds": ["member-id"] }` for preselecting the project editor's checkboxes. It is restricted to MANAGER and ADMIN.
 
 Deleting a project referenced by any report returns 409; archive it to retain its historical references. Deleting an unreferenced project also removes its project-member assignments.
 
