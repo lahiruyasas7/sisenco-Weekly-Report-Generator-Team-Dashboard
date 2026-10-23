@@ -1,4 +1,6 @@
-const REPORT_TIMEZONE = 'Asia/Colombo';
+// Next inlines this public setting into client bundles; it must match the API's REPORT_TIMEZONE.
+const REPORT_TIMEZONE =
+  process.env.NEXT_PUBLIC_REPORT_TIMEZONE ?? 'Asia/Colombo';
 
 export function getCurrentWeekStart(now = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-CA', {

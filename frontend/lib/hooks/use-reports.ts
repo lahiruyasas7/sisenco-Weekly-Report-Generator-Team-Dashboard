@@ -67,35 +67,30 @@ export function useReport(reportId: string | undefined) {
   });
 }
 
-function useInvalidateReports() {
+function useInvalidateMyReports() {
   const queryClient = useQueryClient();
-  return async (reportId?: string) => {
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: [...reportQueryKeys.all, 'mine'],
-      }),
-      ...(reportId
-        ? [
-            queryClient.invalidateQueries({
-              queryKey: reportQueryKeys.detail(reportId),
-            }),
-          ]
-        : []),
-    ]);
-  };
+  return () =>
+    queryClient.invalidateQueries({
+      queryKey: [...reportQueryKeys.all, 'mine'],
+    });
 }
 
 export function useCreateReport() {
-  const invalidate = useInvalidateReports();
+  const queryClient = useQueryClient();
+  const invalidateMine = useInvalidateMyReports();
   return useMutation({
     mutationFn: (input: CreateReportInput) =>
       apiRequest<Report>('/reports', { method: 'POST', body: input }),
-    onSuccess: async (report) => invalidate(report.id),
+    onSuccess: async (report) => {
+      queryClient.setQueryData(reportQueryKeys.detail(report.id), report);
+      await invalidateMine();
+    },
   });
 }
 
 export function useUpdateReport() {
-  const invalidate = useInvalidateReports();
+  const queryClient = useQueryClient();
+  const invalidateMine = useInvalidateMyReports();
   return useMutation({
     mutationFn: ({
       reportId,
@@ -108,28 +103,41 @@ export function useUpdateReport() {
         method: 'PATCH',
         body: input,
       }),
-    onSuccess: async (report) => invalidate(report.id),
+    onSuccess: async (report) => {
+      queryClient.setQueryData(reportQueryKeys.detail(report.id), report);
+      await invalidateMine();
+    },
   });
 }
 
 export function useSubmitReport() {
-  const invalidate = useInvalidateReports();
+  const queryClient = useQueryClient();
+  const invalidateMine = useInvalidateMyReports();
   return useMutation({
     mutationFn: (reportId: string) =>
       apiRequest<Report>(`/reports/${encodeURIComponent(reportId)}/submit`, {
         method: 'POST',
       }),
-    onSuccess: async (report) => invalidate(report.id),
+    onSuccess: async (report) => {
+      queryClient.setQueryData(reportQueryKeys.detail(report.id), report);
+      await invalidateMine();
+    },
   });
 }
 
 export function useDeleteReport() {
-  const invalidate = useInvalidateReports();
+  const queryClient = useQueryClient();
+  const invalidateMine = useInvalidateMyReports();
   return useMutation({
     mutationFn: (reportId: string) =>
       apiRequest<void>(`/reports/${encodeURIComponent(reportId)}`, {
         method: 'DELETE',
       }),
-    onSuccess: async () => invalidate(),
+    onSuccess: async (_result, reportId) => {
+      queryClient.removeQueries({
+        queryKey: reportQueryKeys.detail(reportId),
+      });
+      await invalidateMine();
+    },
   });
 }

@@ -1,10 +1,16 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import { memo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useFieldArray, useForm, useWatch } from 'react-hook-form';
-import type { Path } from 'react-hook-form';
+import {
+  useFieldArray,
+  useForm,
+  useFormState,
+  useWatch,
+} from 'react-hook-form';
+import type { Path, UseFormReturn } from 'react-hook-form';
 import { useProjects } from '@/lib/hooks/use-projects';
 import { useSubmitReport, useUpdateReport } from '@/lib/hooks/use-reports';
 import type {
@@ -16,6 +22,7 @@ import type {
 import {
   reportDraftSchema,
   reportSubmitSchema,
+  REPORT_ROW_LIMITS,
   type ReportFormValues,
 } from '@/lib/validators/reports';
 
@@ -47,10 +54,12 @@ function SectionHeading({
   title,
   onAdd,
   addLabel,
+  disabled = false,
 }: {
   title: string;
   onAdd?: () => void;
   addLabel?: string;
+  disabled?: boolean;
 }) {
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -59,6 +68,7 @@ function SectionHeading({
         <button
           type="button"
           onClick={onAdd}
+          disabled={disabled}
           className="rounded-md border border-[#d7dcd8] px-3 py-2 text-xs font-medium text-[#245b53]"
         >
           {addLabel}
@@ -67,6 +77,89 @@ function SectionHeading({
     </div>
   );
 }
+
+const LinksEditor = memo(function LinksEditor({
+  control,
+  register,
+  setValue,
+}: {
+  control: UseFormReturn<ReportFormValues>['control'];
+  register: UseFormReturn<ReportFormValues>['register'];
+  setValue: UseFormReturn<ReportFormValues>['setValue'];
+}) {
+  const linkValues = useWatch({ control, name: 'links' }) ?? [];
+  const { errors } = useFormState({ control, name: ['links', 'notes'] });
+
+  return (
+    <section className={sectionClass}>
+      <SectionHeading title="7. Optional notes and links" />
+      <label className="space-y-1 text-xs text-[#545f5b]">
+        Notes
+        <textarea
+          rows={4}
+          maxLength={5000}
+          className={`${inputClass} h-auto resize-y py-2`}
+          {...register('notes')}
+        />
+        <ErrorText>{errors.notes?.message}</ErrorText>
+      </label>
+      <div className="mt-4 space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-[#545f5b]">
+            Links (up to {REPORT_ROW_LIMITS.links})
+          </p>
+          <button
+            type="button"
+            disabled={linkValues.length >= REPORT_ROW_LIMITS.links}
+            onClick={() =>
+              setValue('links', [...linkValues, ''], {
+                shouldDirty: true,
+              })
+            }
+            className="rounded-md border border-[#d7dcd8] px-3 py-2 text-xs font-medium disabled:opacity-50"
+          >
+            Add link
+          </button>
+        </div>
+        <ErrorText>
+          {errors.links?.message ?? errors.links?.root?.message}
+        </ErrorText>
+        {linkValues.map((_, index) => (
+          <div key={`link-${index}`} className="flex gap-2">
+            <input
+              type="url"
+              maxLength={2000}
+              aria-label={`Link ${index + 1}`}
+              className={inputClass}
+              {...register(`links.${index}`)}
+            />
+            <button
+              type="button"
+              onClick={() =>
+                setValue(
+                  'links',
+                  linkValues.filter((__, itemIndex) => itemIndex !== index),
+                  { shouldDirty: true },
+                )
+              }
+              className="px-2 text-xs font-medium text-red-700"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+        {linkValues.map((_, index) => (
+          <ErrorText key={`link-error-${index}`}>
+            {errors.links?.[index]?.message}
+          </ErrorText>
+        ))}
+        {linkValues.length === 0 ? (
+          <p className="text-xs text-[#66716d]">No links added.</p>
+        ) : null}
+      </div>
+    </section>
+  );
+});
 
 export function ReportEditor({ report }: { report: Report }) {
   const router = useRouter();
@@ -110,7 +203,6 @@ export function ReportEditor({ report }: { report: Report }) {
     report.status === 'DRAFT' || report.status === 'NEEDS_CORRECTION';
   const isSaving = updateReport.isPending || submitReport.isPending;
   const serverError = form.formState.errors.root?.server?.message;
-  const linkValues = useWatch({ control: form.control, name: 'links' });
   const projects = projectsQuery.data?.data ?? [];
   const selectedProject = report.content.project;
   const selectedProjectArchived = Boolean(
@@ -279,7 +371,7 @@ export function ReportEditor({ report }: { report: Report }) {
 
       <section className={sectionClass}>
         <SectionHeading
-          title="2. Tasks completed"
+          title={`2. Tasks completed (up to ${REPORT_ROW_LIMITS.tasks})`}
           onAdd={() =>
             tasks.append({
               name: '',
@@ -292,6 +384,7 @@ export function ReportEditor({ report }: { report: Report }) {
               output: '',
             })
           }
+          disabled={tasks.fields.length >= REPORT_ROW_LIMITS.tasks}
           addLabel="Add task"
         />
         <ErrorText>
@@ -419,7 +512,7 @@ export function ReportEditor({ report }: { report: Report }) {
 
       <section className={sectionClass}>
         <SectionHeading
-          title="3. Tasks planned for next week"
+          title={`3. Tasks planned for next week (up to ${REPORT_ROW_LIMITS.nextWeekTasks})`}
           onAdd={() =>
             nextWeekTasks.append({
               description: '',
@@ -427,8 +520,15 @@ export function ReportEditor({ report }: { report: Report }) {
               estimatedHours: null,
             })
           }
+          disabled={
+            nextWeekTasks.fields.length >= REPORT_ROW_LIMITS.nextWeekTasks
+          }
           addLabel="Add next-week task"
         />
+        <ErrorText>
+          {form.formState.errors.nextWeekTasks?.message ??
+            form.formState.errors.nextWeekTasks?.root?.message}
+        </ErrorText>
         <div className="space-y-3">
           {nextWeekTasks.fields.map((field, index) => (
             <div
@@ -490,7 +590,7 @@ export function ReportEditor({ report }: { report: Report }) {
 
       <section className={sectionClass}>
         <SectionHeading
-          title="4. Blockers and challenges"
+          title={`4. Blockers and challenges (up to ${REPORT_ROW_LIMITS.blockers})`}
           onAdd={() =>
             blockers.append({
               description: '',
@@ -498,6 +598,7 @@ export function ReportEditor({ report }: { report: Report }) {
               isResolved: false,
             })
           }
+          disabled={blockers.fields.length >= REPORT_ROW_LIMITS.blockers}
           addLabel="Add blocker"
         />
         <ErrorText>
@@ -557,8 +658,11 @@ export function ReportEditor({ report }: { report: Report }) {
 
       <section className={sectionClass}>
         <SectionHeading
-          title="5. Achievements and highlights"
+          title={`5. Achievements and highlights (up to ${REPORT_ROW_LIMITS.achievements})`}
           onAdd={() => achievements.append({ description: '', isKey: false })}
+          disabled={
+            achievements.fields.length >= REPORT_ROW_LIMITS.achievements
+          }
           addLabel="Add achievement"
         />
         <ErrorText>
@@ -610,10 +714,11 @@ export function ReportEditor({ report }: { report: Report }) {
 
       <section className={sectionClass}>
         <SectionHeading
-          title="6. Hours worked by task type"
+          title={`6. Hours worked by task type (up to ${REPORT_ROW_LIMITS.timeEntries})`}
           onAdd={() =>
             timeEntries.append({ taskType: 'DEVELOPMENT', hours: 0 })
           }
+          disabled={timeEntries.fields.length >= REPORT_ROW_LIMITS.timeEntries}
           addLabel="Add hours"
         />
         <ErrorText>
@@ -666,72 +771,11 @@ export function ReportEditor({ report }: { report: Report }) {
         </div>
       </section>
 
-      <section className={sectionClass}>
-        <SectionHeading title="7. Optional notes and links" />
-        <label className="space-y-1 text-xs text-[#545f5b]">
-          Notes
-          <textarea
-            rows={4}
-            maxLength={5000}
-            className={`${inputClass} h-auto resize-y py-2`}
-            {...form.register('notes')}
-          />
-          <ErrorText>{form.formState.errors.notes?.message}</ErrorText>
-        </label>
-        <div className="mt-4 space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs text-[#545f5b]">Links (up to 20)</p>
-            <button
-              type="button"
-              disabled={linkValues.length >= 20}
-              onClick={() =>
-                form.setValue('links', [...linkValues, ''], {
-                  shouldDirty: true,
-                })
-              }
-              className="rounded-md border border-[#d7dcd8] px-3 py-2 text-xs font-medium disabled:opacity-50"
-            >
-              Add link
-            </button>
-          </div>
-          <ErrorText>
-            {form.formState.errors.links?.message ??
-              form.formState.errors.links?.root?.message}
-          </ErrorText>
-          {linkValues.map((_, index) => (
-            <div key={`link-${index}`} className="flex gap-2">
-              <input
-                type="url"
-                maxLength={2000}
-                aria-label={`Link ${index + 1}`}
-                className={inputClass}
-                {...form.register(`links.${index}`)}
-              />
-              <button
-                type="button"
-                onClick={() =>
-                  form.setValue(
-                    'links',
-                    linkValues.filter((__, itemIndex) => itemIndex !== index),
-                    { shouldDirty: true },
-                  )
-                }
-                className="px-2 text-xs font-medium text-red-700"
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-          {linkValues.map((_, index) => (
-            <ErrorText key={`link-error-${index}`}>
-              {form.formState.errors.links?.[index]?.message}
-            </ErrorText>
-          ))}
-          {linkValues.length === 0 ? (
-            <p className="text-xs text-[#66716d]">No links added.</p>
-          ) : null}
-        </div>
-      </section>
+      <LinksEditor
+        control={form.control}
+        register={form.register}
+        setValue={form.setValue}
+      />
 
       <footer className="sticky bottom-0 flex flex-wrap justify-end gap-2 rounded-xl border border-[#dedfdc] bg-white/95 p-3 shadow-sm backdrop-blur">
         <Link

@@ -17,6 +17,17 @@ const taskTypeSchema = z.enum([
   'OTHER',
 ]);
 
+export const REPORT_ROW_LIMITS = {
+  tasks: 50,
+  nextWeekTasks: 50,
+  blockers: 20,
+  achievements: 20,
+  timeEntries: 6,
+  links: 20,
+} as const;
+
+const quarterHourSchema = z.number().min(0).multipleOf(0.25);
+
 const taskSchema = z.object({
   name: z
     .string()
@@ -26,8 +37,8 @@ const taskSchema = z.object({
   plannedPercent: z.number().int().min(0).max(100),
   actualPercent: z.number().int().min(0).max(100),
   status: taskStatusSchema,
-  plannedHours: z.number().min(0),
-  spentHours: z.number().min(0),
+  plannedHours: quarterHourSchema,
+  spentHours: quarterHourSchema,
   output: z.string().max(1000, 'Output must be 1000 characters or fewer.'),
 });
 
@@ -37,7 +48,7 @@ const nextWeekTaskSchema = z.object({
     .trim()
     .max(1000, 'Description must be 1000 characters or fewer.'),
   priority: prioritySchema,
-  estimatedHours: z.number().min(0).nullable(),
+  estimatedHours: quarterHourSchema.nullable(),
 });
 
 const blockerSchema = z.object({
@@ -59,7 +70,7 @@ const achievementSchema = z.object({
 
 const timeEntrySchema = z.object({
   taskType: taskTypeSchema,
-  hours: z.number().min(0),
+  hours: quarterHourSchema,
 });
 
 function isHttpUrl(value: string): boolean {
@@ -74,11 +85,30 @@ function isHttpUrl(value: string): boolean {
 export const reportDraftSchema = z
   .object({
     projectId: z.string(),
-    tasks: z.array(taskSchema),
-    nextWeekTasks: z.array(nextWeekTaskSchema),
-    blockers: z.array(blockerSchema),
-    achievements: z.array(achievementSchema),
-    timeEntries: z.array(timeEntrySchema),
+    tasks: z
+      .array(taskSchema)
+      .max(REPORT_ROW_LIMITS.tasks, 'You can add at most 50 tasks.'),
+    nextWeekTasks: z
+      .array(nextWeekTaskSchema)
+      .max(
+        REPORT_ROW_LIMITS.nextWeekTasks,
+        'You can add at most 50 next-week tasks.',
+      ),
+    blockers: z
+      .array(blockerSchema)
+      .max(REPORT_ROW_LIMITS.blockers, 'You can add at most 20 blockers.'),
+    achievements: z
+      .array(achievementSchema)
+      .max(
+        REPORT_ROW_LIMITS.achievements,
+        'You can add at most 20 achievements.',
+      ),
+    timeEntries: z
+      .array(timeEntrySchema)
+      .max(
+        REPORT_ROW_LIMITS.timeEntries,
+        'You can add at most 6 time entries.',
+      ),
     notes: z.string().max(5000, 'Notes must be 5000 characters or fewer.'),
     links: z
       .array(
@@ -87,7 +117,7 @@ export const reportDraftSchema = z
           .max(2000, 'Links must be 2000 characters or fewer.')
           .refine(isHttpUrl, 'Enter a valid http(s) URL.'),
       )
-      .max(20, 'You can add at most 20 links.'),
+      .max(REPORT_ROW_LIMITS.links, 'You can add at most 20 links.'),
   })
   .superRefine((values, context) => {
     if (values.blockers.filter(({ isKey }) => isKey).length > 1) {
@@ -167,7 +197,11 @@ export const createReportSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter a valid week start date.')
     .refine((value) => {
       const date = new Date(`${value}T00:00:00Z`);
-      return !Number.isNaN(date.valueOf()) && date.getUTCDay() === 1;
+      return (
+        Number.isFinite(date.valueOf()) &&
+        date.toISOString().slice(0, 10) === value &&
+        date.getUTCDay() === 1
+      );
     }, 'Choose a Monday for the start of the report week.')
     .refine(
       (value) => value <= getCurrentWeekStart(),
