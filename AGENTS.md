@@ -90,16 +90,16 @@ NEEDS_CORRECTION --owner edits, resubmits--> SUBMITTED (new version)
 
 - Fixed structure for everyone (see `docs/API.md` `ReportContent`). No customisation.
 - `weekStart` must be a Monday; `weekEnd = weekStart + 6 days` (DB CHECK as well). One report per user per week. No week after the current one. Past weeks allowed (they will count as late).
-- **Drafts save leniently:** child rows have DB defaults (`priority MEDIUM`, `status IN_PROGRESS`, percents/hours `0`), and `name`/`description` may be empty. Percents must still be 0–100 and hours ≥ 0 (DB CHECK).
+- **Drafts save leniently:** child rows have DB defaults (`priority MEDIUM`, `status IN_PROGRESS`, percents/hours `0`), and `name`/`description` may be empty. Percents must still be 0–100 and hours ≥ 0 in 0.25 increments (DTO and DB CHECK).
 - **Submit requires:** project set and non-archived, ≥1 task, every task has non-empty name, percents 0–100, hours ≥ 0. Rows with empty descriptions in next-week/blockers/achievements are rejected at submit (or dropped; pick one and keep it consistent).
 - Max one key blocker and one key achievement per report: service check **and** partial unique index; map Prisma `P2002` to 409/400 via the exception filter.
-- DTO string limits: task name ≤ 200, output/description ≤ 1000, notes ≤ 5000, links: ≤ 20 valid http(s) URLs, max 2000 chars each. Mirror in Zod.
+- DTO limits: task name ≤ 200, output/description ≤ 1000, notes ≤ 5000, links: ≤ 20 valid http(s) URLs, max 2000 chars each; rows: 50 tasks, 50 next-week tasks, 20 blockers, 20 achievements, and 6 time entries. Mirror in Zod.
 - Project choice: any non-archived project (assignment via `ProjectMember` only sorts/suggests; it does not restrict). There is **no** per-task project override: workload-by-project uses `report.projectId`.
 - Project delete → 409 if any report references it (suggest archive).
 
 ## Dates, deadlines, lateness
 
-- API uses date-only strings `YYYY-MM-DD`. All week maths lives in `common/utils/week.util.ts` using luxon with `REPORT_TIMEZONE` (default `Asia/Colombo`). Never use bare `new Date()` for week logic.
+- API uses date-only strings `YYYY-MM-DD`. Backend week maths uses luxon with `REPORT_TIMEZONE` (default `Asia/Colombo`); frontend `NEXT_PUBLIC_REPORT_TIMEZONE` must match it. Never use bare `new Date()` for backend week logic.
 - `deadline = weekStart 00:00 (REPORT_TIMEZONE) + REPORT_DUE_OFFSET_DAYS (default 7)`.
 - Lateness uses **`Report.firstSubmittedAt`** (never overwritten on resubmit), not `submittedAt`.
 - Compliance buckets (mutually exclusive, over _active members created on or before `weekEnd`_):
@@ -144,7 +144,7 @@ NEEDS_CORRECTION --owner edits, resubmits--> SUBMITTED (new version)
 ## Environment variables
 
 Backend: `DATABASE_URL`, `JWT_SECRET` (≥32 bytes, required, no default), `FRONTEND_ORIGIN`, `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_NAME`, `INITIAL_ADMIN_PASSWORD` (seed command only), `PORT=3001`, `NODE_ENV`, `REPORT_TIMEZONE=Asia/Colombo`, `REPORT_DUE_OFFSET_DAYS=7`, `ANTHROPIC_API_KEY` (optional slice only).
-Frontend: `BACKEND_URL`.
+Frontend: `BACKEND_URL`, `NEXT_PUBLIC_REPORT_TIMEZONE` (must match backend `REPORT_TIMEZONE`; defaults to `Asia/Colombo`).
 Provide `.env.example` for both. Validate env at startup (fail fast). Never commit real secrets.
 
 ## Repo layout
@@ -176,8 +176,8 @@ Each slice = backend + frontend + tests, then update this section and commit.
 - [x] 0. Scaffold: two packages, docker-compose (dev DB only), env files, Prisma tooling (initial migration deferred until schema models exist), exception filter, health, lint/CI scripts. Seed script deferred until the seed slice.
 - [x] 1. Auth + guards + user management (+ RBAC e2e foundation, deactivation test)
 - [x] 2. Projects CRUD (backend, projects UI, assignment picker, and tests)
-- [ ] 3a. Reports backend: create/edit/submit/delete, snapshot, validation, access service (+ tests)
-- [ ] 3b. Report form UI (tasks table, blockers, achievements, hours, notes) + history + detail
+- [x] 3a. Reports backend: create/edit/submit/delete, snapshot, validation, access service (+ tests)
+- [x] 3b. Report form UI (tasks table, blockers, achievements, hours, notes) + history + detail
 - [ ] 4. Review workflow + versions + manager review page (+ full-cycle e2e)
 - [ ] 5. Seed script (needed before dashboard work)
 - [ ] 6. Team week view, filters, status tracker, member profile, sections view
@@ -192,8 +192,9 @@ Seed (idempotent): 1 admin, 1 manager, 5 members, 5 projects (Client A, Client B
 - Managers/non-owners always see the `currentVersion` snapshot; drafts invisible to managers.
 - `Report.firstSubmittedAt` added so lateness survives resubmits.
 - `Review.versionId` unique: one review per version.
+- Draft reports may omit a project; every submission requires a non-archived project.
 - No per-task project override; no invite flow; no refresh tokens (1-day JWT, DB check per request).
-- Hours stored as `Float`, validated to 0.25 steps in UI; round to 2 decimals in aggregates.
+- Hours stored as `Float`, validated to 0.25 steps in the UI, DTO, and DB; round to 2 decimals in aggregates.
 - Dashboard content aggregates exclude `DRAFT` and `NEEDS_CORRECTION`.
 - No workspaces; luxon for week maths.
 

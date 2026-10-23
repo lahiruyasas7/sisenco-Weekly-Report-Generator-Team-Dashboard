@@ -107,6 +107,8 @@ Deleting a project referenced by any report returns 409; archive it to retain it
 
 `POST /reports` accepts an optional `projectId`; this lets a member save a draft before choosing its project. `PATCH /reports/:id` may set `projectId` to null while the report is editable. Every submitted version has a non-archived project.
 
+All hour values must be non-negative quarter-hour increments (`0.25`). To keep week validation consistent, `NEXT_PUBLIC_REPORT_TIMEZONE` in the frontend must match the backend's `REPORT_TIMEZONE` (both default to `Asia/Colombo`). Report child row limits are 50 tasks, 50 next-week tasks, 20 blockers, 20 achievements, and 6 time entries; links remain limited to 20.
+
 ## Reports: shared read
 Owner: any own report (working copy). MANAGER/ADMIN: non-draft only (snapshot of `currentVersion`). Everyone else: 404.
 
