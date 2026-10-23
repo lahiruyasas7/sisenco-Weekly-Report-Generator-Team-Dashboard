@@ -52,18 +52,25 @@ function ErrorText({ children }: { children?: string }) {
 
 function SectionHeading({
   title,
+  limitHint,
   onAdd,
   addLabel,
   disabled = false,
 }: {
   title: string;
+  limitHint?: string;
   onAdd?: () => void;
   addLabel?: string;
   disabled?: boolean;
 }) {
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <h2 className="text-base font-semibold">{title}</h2>
+      <div className="flex items-center gap-2">
+        <h2 className="text-base font-semibold">{title}</h2>
+        {limitHint ? (
+          <span className="text-xs text-[#66716d]">{limitHint}</span>
+        ) : null}
+      </div>
       {onAdd && addLabel ? (
         <button
           type="button"
@@ -371,7 +378,8 @@ export function ReportEditor({ report }: { report: Report }) {
 
       <section className={sectionClass}>
         <SectionHeading
-          title={`2. Tasks completed (up to ${REPORT_ROW_LIMITS.tasks})`}
+          title="2. Tasks completed"
+          limitHint={`Up to ${REPORT_ROW_LIMITS.tasks}`}
           onAdd={() =>
             tasks.append({
               name: '',
@@ -512,7 +520,8 @@ export function ReportEditor({ report }: { report: Report }) {
 
       <section className={sectionClass}>
         <SectionHeading
-          title={`3. Tasks planned for next week (up to ${REPORT_ROW_LIMITS.nextWeekTasks})`}
+          title="3. Tasks planned for next week"
+          limitHint={`Up to ${REPORT_ROW_LIMITS.nextWeekTasks}`}
           onAdd={() =>
             nextWeekTasks.append({
               description: '',
@@ -590,7 +599,8 @@ export function ReportEditor({ report }: { report: Report }) {
 
       <section className={sectionClass}>
         <SectionHeading
-          title={`4. Blockers and challenges (up to ${REPORT_ROW_LIMITS.blockers})`}
+          title="4. Blockers and challenges"
+          limitHint={`Up to ${REPORT_ROW_LIMITS.blockers}`}
           onAdd={() =>
             blockers.append({
               description: '',
@@ -658,7 +668,8 @@ export function ReportEditor({ report }: { report: Report }) {
 
       <section className={sectionClass}>
         <SectionHeading
-          title={`5. Achievements and highlights (up to ${REPORT_ROW_LIMITS.achievements})`}
+          title="5. Achievements and highlights"
+          limitHint={`Up to ${REPORT_ROW_LIMITS.achievements}`}
           onAdd={() => achievements.append({ description: '', isKey: false })}
           disabled={
             achievements.fields.length >= REPORT_ROW_LIMITS.achievements
@@ -714,7 +725,8 @@ export function ReportEditor({ report }: { report: Report }) {
 
       <section className={sectionClass}>
         <SectionHeading
-          title={`6. Hours worked by task type (up to ${REPORT_ROW_LIMITS.timeEntries})`}
+          title="6. Hours worked by task type"
+          limitHint={`Up to ${REPORT_ROW_LIMITS.timeEntries}`}
           onAdd={() =>
             timeEntries.append({ taskType: 'DEVELOPMENT', hours: 0 })
           }
