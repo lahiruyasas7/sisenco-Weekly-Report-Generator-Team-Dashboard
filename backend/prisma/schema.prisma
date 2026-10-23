@@ -7,8 +7,8 @@ datasource db {
   provider = "postgresql"
 }
 
-// Raw SQL constraints enforce report week rules, numeric bounds, one key blocker/achievement,
-// non-negative currentVersion, and case-insensitive trimmed Project name uniqueness.
+// Raw SQL constraints enforce report week rules, numeric bounds, quarter-hour increments,
+// one key blocker/achievement, non-negative currentVersion, and normalized project names.
 
 enum Role {
   MEMBER

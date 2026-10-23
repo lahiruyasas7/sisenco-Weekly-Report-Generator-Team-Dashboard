@@ -12,7 +12,9 @@ import {
   IsUUID,
   Max,
   MaxLength,
+  registerDecorator,
   Min,
+  type ValidationOptions,
   ValidateNested,
 } from 'class-validator';
 import {
@@ -20,6 +22,30 @@ import {
   TaskStatus,
   TaskType,
 } from '../../generated/prisma/client.js';
+
+function IsQuarterHour(validationOptions?: ValidationOptions) {
+  return (target: object, propertyName: string): void => {
+    registerDecorator({
+      name: 'isQuarterHour',
+      target: target.constructor,
+      propertyName,
+      options: validationOptions,
+      validator: {
+        validate(value: unknown): boolean {
+          // Scaling by four avoids floating-point remainder checks for quarter hours.
+          return (
+            typeof value === 'number' &&
+            Number.isFinite(value) &&
+            Number.isInteger(value * 4)
+          );
+        },
+        defaultMessage(): string {
+          return 'Hours must be in 0.25-hour increments.';
+        },
+      },
+    });
+  };
+}
 
 export class UpdateReportTaskDto {
   @IsOptional()
@@ -50,11 +76,13 @@ export class UpdateReportTaskDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @IsQuarterHour()
   plannedHours?: number;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @IsQuarterHour()
   spentHours?: number;
 
   @IsOptional()
@@ -76,6 +104,7 @@ export class UpdateNextWeekTaskDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @IsQuarterHour()
   estimatedHours?: number;
 }
 
@@ -111,6 +140,7 @@ export class UpdateTimeEntryDto {
 
   @IsNumber()
   @Min(0)
+  @IsQuarterHour()
   hours!: number;
 }
 
@@ -121,30 +151,35 @@ export class UpdateReportDto {
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(50)
   @ValidateNested({ each: true })
   @Type(() => UpdateReportTaskDto)
   tasks?: UpdateReportTaskDto[];
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(50)
   @ValidateNested({ each: true })
   @Type(() => UpdateNextWeekTaskDto)
   nextWeekTasks?: UpdateNextWeekTaskDto[];
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(20)
   @ValidateNested({ each: true })
   @Type(() => UpdateBlockerDto)
   blockers?: UpdateBlockerDto[];
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(20)
   @ValidateNested({ each: true })
   @Type(() => UpdateAchievementDto)
   achievements?: UpdateAchievementDto[];
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(6)
   @ValidateNested({ each: true })
   @Type(() => UpdateTimeEntryDto)
   timeEntries?: UpdateTimeEntryDto[];
