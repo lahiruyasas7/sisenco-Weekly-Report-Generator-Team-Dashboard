@@ -36,6 +36,7 @@ export class ProjectsService {
         where,
         select: {
           ...projectFields,
+          _count: { select: { members: true, reports: true } },
           members: {
             where: { userId },
             select: { userId: true },
@@ -50,9 +51,11 @@ export class ProjectsService {
     ]);
 
     return {
-      data: projects.map(({ members, ...project }) => ({
+      data: projects.map(({ members, _count, ...project }) => ({
         ...project,
         isAssigned: members.length > 0,
+        memberCount: _count.members,
+        reportCount: _count.reports,
       })),
       meta: {
         page: input.page,
@@ -70,6 +73,22 @@ export class ProjectsService {
         select: { id: true, name: true },
         orderBy: [{ name: 'asc' }, { id: 'asc' }],
       }),
+    };
+  }
+
+  async assignedMemberIds(projectId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        id: true,
+        members: { select: { userId: true }, orderBy: { userId: 'asc' } },
+      },
+    });
+    if (!project) throw new NotFoundException('Project not found');
+
+    return {
+      projectId,
+      memberIds: project.members.map(({ userId }) => userId),
     };
   }
 

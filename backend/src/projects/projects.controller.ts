@@ -70,4 +70,10 @@ export class ProjectsController {
   ) {
     return this.projectsService.replaceMembers(projectId, input);
   }
+
+  @Get(':id/members')
+  @Roles(Role.MANAGER, Role.ADMIN)
+  assignedMemberIds(@Param('id', ParseUUIDPipe) projectId: string) {
+    return this.projectsService.assignedMemberIds(projectId);
+  }
 }
