@@ -89,3 +89,103 @@ export type UpdateUserInput = {
   role?: UserRole;
   isActive?: boolean;
 };
+
+export type ReportStatus =
+  | 'DRAFT'
+  | 'SUBMITTED'
+  | 'NEEDS_CORRECTION'
+  | 'APPROVED';
+
+export type ReportPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type ReportTaskStatus =
+  | 'COMPLETED'
+  | 'IN_PROGRESS'
+  | 'BLOCKED'
+  | 'DEFERRED';
+export type ReportTaskType =
+  | 'DEVELOPMENT'
+  | 'TESTING'
+  | 'MEETINGS'
+  | 'DOCUMENTATION'
+  | 'DESIGN'
+  | 'OTHER';
+
+export type ReportContent = {
+  weekStart: string;
+  weekEnd: string;
+  project: { id: string; name: string } | null;
+  tasks: {
+    name: string;
+    priority: ReportPriority;
+    plannedPercent: number;
+    actualPercent: number;
+    status: ReportTaskStatus;
+    plannedHours: number;
+    spentHours: number;
+    output: string;
+  }[];
+  nextWeekTasks: {
+    description: string;
+    priority: ReportPriority;
+    estimatedHours: number | null;
+  }[];
+  blockers: { description: string; isKey: boolean; isResolved: boolean }[];
+  achievements: { description: string; isKey: boolean }[];
+  timeEntries: { taskType: ReportTaskType; hours: number }[];
+  notes: string;
+  links: string[];
+};
+
+export type ReportReview = {
+  action: 'APPROVED' | 'CHANGES_REQUESTED';
+  comment: string | null;
+  createdAt: string;
+  reviewer: { id: string; name: string };
+};
+
+export type Report = {
+  id: string;
+  user: { id: string; name: string };
+  status: ReportStatus;
+  currentVersion: number;
+  submittedAt: string | null;
+  firstSubmittedAt: string | null;
+  reviewedAt: string | null;
+  latestReview: ReportReview | null;
+  content: ReportContent;
+};
+
+export type ReportListItem = {
+  id: string;
+  weekStart: string;
+  weekEnd: string;
+  status: ReportStatus;
+  currentVersion: number;
+  submittedAt: string | null;
+  firstSubmittedAt: string | null;
+  project: { id: string; name: string } | null;
+};
+
+export type ReportListParams = {
+  page?: number;
+  limit?: number;
+  status?: ReportStatus;
+  from?: string;
+  to?: string;
+};
+
+export type CreateReportInput = {
+  weekStart: string;
+  projectId?: string;
+};
+
+export type UpdateReportInput = {
+  projectId: string | null;
+  tasks: ReportContent['tasks'];
+  nextWeekTasks: ReportContent['nextWeekTasks'];
+  blockers: ReportContent['blockers'];
+  achievements: ReportContent['achievements'];
+  timeEntries: ReportContent['timeEntries'];
+  notes: string | null;
+  links: string[];
+};
