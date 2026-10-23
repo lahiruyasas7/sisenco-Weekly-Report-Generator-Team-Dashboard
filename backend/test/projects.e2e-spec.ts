@@ -282,9 +282,11 @@ describe('Projects API (e2e)', () => {
       .get(`${API}/projects/${project.id}/members`)
       .set('Cookie', managerCookie)
       .expect(200)
-      .expect({
-        projectId: project.id,
-        memberIds: [member.id, secondMember.id],
+      .expect((response) => {
+        expect(response.body).toEqual({
+          projectId: project.id,
+          memberIds: [member.id, secondMember.id].sort(),
+        });
       });
 
     await request(app.getHttpServer())
