@@ -12,6 +12,8 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     clearMocks: true,
     restoreMocks: true,
+    // Avoid worker startup timeouts on constrained local Windows environments.
+    fileParallelism: false,
     include: ['**/*.{test,spec}.{ts,tsx}'],
     exclude: ['**/node_modules/**', '**/.next/**', '**/out/**', '**/build/**'],
   },
