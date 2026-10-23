@@ -175,7 +175,7 @@ Each slice = backend + frontend + tests, then update this section and commit.
 
 - [x] 0. Scaffold: two packages, docker-compose (dev DB only), env files, Prisma tooling (initial migration deferred until schema models exist), exception filter, health, lint/CI scripts. Seed script deferred until the seed slice.
 - [x] 1. Auth + guards + user management (+ RBAC e2e foundation, deactivation test)
-- [ ] 2. Projects CRUD
+- [x] 2. Projects CRUD (backend, projects UI, assignment picker, and tests)
 - [ ] 3a. Reports backend: create/edit/submit/delete, snapshot, validation, access service (+ tests)
 - [ ] 3b. Report form UI (tasks table, blockers, achievements, hours, notes) + history + detail
 - [ ] 4. Review workflow + versions + manager review page (+ full-cycle e2e)
