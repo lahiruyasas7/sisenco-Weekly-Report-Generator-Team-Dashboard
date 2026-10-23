@@ -7,7 +7,7 @@ datasource db {
   provider = "postgresql"
 }
 
-// Raw SQL constraints in migrations enforce the Report Monday/week-end rules,
+// Raw SQL constraints enforce report week rules, numeric bounds, one key blocker/achievement,
 // non-negative currentVersion, and case-insensitive trimmed Project name uniqueness.
 
 enum Role {
@@ -23,10 +23,33 @@ enum ReportStatus {
   APPROVED
 }
 
-// enum Priority     { LOW MEDIUM HIGH CRITICAL }
-// enum TaskStatus   { COMPLETED IN_PROGRESS BLOCKED DEFERRED }
-// enum TaskType     { DEVELOPMENT TESTING MEETINGS DOCUMENTATION DESIGN OTHER }
-// enum ReviewAction { APPROVED CHANGES_REQUESTED }
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TaskStatus {
+  COMPLETED
+  IN_PROGRESS
+  BLOCKED
+  DEFERRED
+}
+
+enum TaskType {
+  DEVELOPMENT
+  TESTING
+  MEETINGS
+  DOCUMENTATION
+  DESIGN
+  OTHER
+}
+
+enum ReviewAction {
+  APPROVED
+  CHANGES_REQUESTED
+}
 
 model User {
   id                 String          @id @default(uuid())
@@ -40,8 +63,8 @@ model User {
   updatedAt          DateTime        @updatedAt
   sessions           UserSession[]
   reports            Report[]
-  // reviews            Review[]
-  // versionsSubmitted  ReportVersion[]
+  reviews            Review[]
+  versionsSubmitted  ReportVersion[]
   projectMemberships ProjectMember[]
 }
 
@@ -87,7 +110,7 @@ model ProjectMember {
 model Report {
   id               String       @id @default(uuid())
   userId           String
-  projectId        String
+  projectId        String?
   weekStart        DateTime     @db.Date
   weekEnd          DateTime     @db.Date
   status           ReportStatus @default(DRAFT)
@@ -100,16 +123,16 @@ model Report {
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
-  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Restrict)
 
-  //   tasks         ReportTask[]
-//   nextWeekTasks NextWeekTask[]
-//   blockers      Blocker[]
-//   achievements  Achievement[]
-//   timeEntries   TimeEntry[]
-//   versions      ReportVersion[]
-//   reviews       Review[]
+  tasks         ReportTask[]
+  nextWeekTasks NextWeekTask[]
+  blockers      Blocker[]
+  achievements  Achievement[]
+  timeEntries   TimeEntry[]
+  versions      ReportVersion[]
+  reviews       Review[]
 
   @@unique([userId, weekStart])
   @@index([status])
@@ -117,102 +140,106 @@ model Report {
   @@index([projectId])
 }
 
-// model ReportTask {
-//   id             String     @id @default(uuid())
-//   reportId       String
-//   position       Int
-//   name           String
-//   priority       Priority
-//   plannedPercent Int                           // 0-100
-//   actualPercent  Int                           // 0-100
-//   status         TaskStatus
-//   plannedHours   Float
-//   spentHours     Float
-//   output         String?
+model ReportTask {
+  id             String     @id @default(uuid())
+  reportId       String
+  position       Int
+  name           String     @default("")
+  priority       Priority   @default(MEDIUM)
+  plannedPercent Int        @default(0)
+  actualPercent  Int        @default(0)
+  status         TaskStatus @default(IN_PROGRESS)
+  plannedHours   Float      @default(0)
+  spentHours     Float      @default(0)
+  output         String?
 
-//   // Project attribution comes from Report.projectId for every task.
-//   report  Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
-//   @@index([reportId])
-// }
+  @@unique([reportId, position])
+  @@index([reportId])
+}
 
-// model NextWeekTask {
-//   id             String   @id @default(uuid())
-//   reportId       String
-//   position       Int
-//   description    String
-//   priority       Priority @default(MEDIUM)
-//   estimatedHours Float?
+model NextWeekTask {
+  id             String   @id @default(uuid())
+  reportId       String
+  position       Int
+  description    String   @default("")
+  priority       Priority @default(MEDIUM)
+  estimatedHours Float?
 
-//   report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
-//   @@index([reportId])
-// }
+  @@unique([reportId, position])
+  @@index([reportId])
+}
 
-// model Blocker {
-//   id          String  @id @default(uuid())
-//   reportId    String
-//   position    Int
-//   description String
-//   isKey       Boolean @default(false)
-//   isResolved  Boolean @default(false)
+model Blocker {
+  id          String  @id @default(uuid())
+  reportId    String
+  position    Int
+  description String  @default("")
+  isKey       Boolean @default(false)
+  isResolved  Boolean @default(false)
 
-//   report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
-//   @@index([reportId])
-// }
+  @@unique([reportId, position])
+  @@index([reportId])
+}
 
-// model Achievement {
-//   id          String  @id @default(uuid())
-//   reportId    String
-//   position    Int
-//   description String
-//   isKey       Boolean @default(false)
+model Achievement {
+  id          String  @id @default(uuid())
+  reportId    String
+  position    Int
+  description String  @default("")
+  isKey       Boolean @default(false)
 
-//   report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
-//   @@index([reportId])
-// }
+  @@unique([reportId, position])
+  @@index([reportId])
+}
 
-// model TimeEntry {
-//   id       String   @id @default(uuid())
-//   reportId String
-//   taskType TaskType
-//   hours    Float
+model TimeEntry {
+  id       String   @id @default(uuid())
+  reportId String
+  taskType TaskType
+  hours    Float    @default(0)
 
-//   report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
-//   @@unique([reportId, taskType])
-// }
+  @@unique([reportId, taskType])
+}
 
-// model ReportVersion {
-//   id            String   @id @default(uuid())
-//   reportId      String
-//   versionNumber Int
-//   snapshot      Json                          // full report content at submit time (see shape below)
-//   submittedById String
-//   submittedAt   DateTime @default(now())
+model ReportVersion {
+  id            String   @id @default(uuid())
+  reportId      String
+  versionNumber Int
+  snapshot      Json
+  submittedById String
+  submittedAt   DateTime @default(now())
 
-//   report      Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
-//   submittedBy User   @relation(fields: [submittedById], references: [id])
-//   reviews     Review[]
+  report      Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  submittedBy User     @relation(fields: [submittedById], references: [id])
+  reviews     Review[]
 
-//   @@unique([reportId, versionNumber])
-// }
+  @@unique([reportId, versionNumber])
+}
 
-// model Review {
-//   id         String       @id @default(uuid())
-//   reportId   String
-//   versionId  String                            // the version this review was made against
-//   reviewerId String
-//   action     ReviewAction
-//   comment    String?                           // required when CHANGES_REQUESTED, optional on APPROVED
-//   createdAt  DateTime     @default(now())
+model Review {
+  id         String       @id @default(uuid())
+  reportId   String
+  versionId  String
+  reviewerId String
+  action     ReviewAction
+  comment    String?
+  createdAt  DateTime     @default(now())
 
-//   report   Report        @relation(fields: [reportId], references: [id], onDelete: Cascade)
-//   version  ReportVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
-//   reviewer User          @relation(fields: [reviewerId], references: [id])
+  report   Report        @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  version  ReportVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  reviewer User          @relation(fields: [reviewerId], references: [id])
 
-//   @@index([reportId])
-//   @@index([createdAt])
-// }
+  @@unique([versionId])
+  @@index([reportId])
+  @@index([createdAt])
+}

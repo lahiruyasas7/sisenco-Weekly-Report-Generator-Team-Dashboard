@@ -25,6 +25,8 @@ export const envSchema = z.object({
       const parsed = new URL(origin);
       return parsed.origin === origin.replace(/\/$/, '');
     }, 'FRONTEND_ORIGIN must be an origin without a path'),
+  REPORT_TIMEZONE: z.string().default('Asia/Colombo'),
+  REPORT_DUE_OFFSET_DAYS: z.coerce.number().int().min(0).max(31).default(7),
 });
 
 export type Env = z.infer<typeof envSchema>;
