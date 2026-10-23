@@ -20,6 +20,8 @@ Working tables are mapped into this shape for the owner. Non-owners get the `cur
 }
 ```
 
+On a draft, `project` may be `null` until the member selects a non-archived project. Submission requires a project.
+
 Report response = `{ id, user: {id,name}, status, currentVersion, submittedAt, firstSubmittedAt, reviewedAt, latestReview?, content: ReportContent }`.
 Snapshots are written only by `ReportSnapshotService` at submit time and are immutable.
 
@@ -102,6 +104,8 @@ Deleting a project referenced by any report returns 409; archive it to retain it
 | PATCH | /reports/:id | MEMBER (owner) | DRAFT / NEEDS_CORRECTION only; replaces all child rows in one transaction |
 | DELETE | /reports/:id | MEMBER (owner) | DRAFT only |
 | POST | /reports/:id/submit | MEMBER (owner) | DRAFT/NEEDS_CORRECTION → SUBMITTED; writes version |
+
+`POST /reports` accepts an optional `projectId`; this lets a member save a draft before choosing its project. `PATCH /reports/:id` may set `projectId` to null while the report is editable. Every submitted version has a non-archived project.
 
 ## Reports: shared read
 Owner: any own report (working copy). MANAGER/ADMIN: non-draft only (snapshot of `currentVersion`). Everyone else: 404.
