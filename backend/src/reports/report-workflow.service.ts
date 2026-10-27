@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   Prisma,
+  ReviewAction,
   ReportStatus,
   type Report,
 } from '../generated/prisma/client.js';
@@ -17,6 +18,7 @@ import {
   ReportSnapshotService,
 } from './report-snapshot.service.js';
 import type { UpdateReportDto } from './dto/update-report.dto.js';
+import type { ReviewReportDto } from './dto/review-report.dto.js';
 
 @Injectable()
 export class ReportWorkflowService {
@@ -241,6 +243,91 @@ export class ReportWorkflowService {
       );
     } catch (error) {
       this.mapTransactionConflict(error);
+      throw error;
+    }
+
+    return this.access.loadForViewer(reportId, user);
+  }
+
+  async review(
+    reportId: string,
+    user: AuthenticatedUser,
+    input: ReviewReportDto,
+  ) {
+    // The shared access check hides drafts and confirms this reviewer may read the report.
+    await this.access.assertCanRead(reportId, user);
+    const comment = input.comment?.trim() || null;
+    if (
+      input.action === ReviewAction.CHANGES_REQUESTED &&
+      (!comment || comment.length > 2000)
+    ) {
+      throw new BadRequestException(
+        'A comment of 1 to 2000 characters is required when requesting changes',
+      );
+    }
+    const reviewedAt = new Date();
+    const nextStatus =
+      input.action === ReviewAction.APPROVED
+        ? ReportStatus.APPROVED
+        : ReportStatus.NEEDS_CORRECTION;
+
+    try {
+      await this.prisma.$transaction(
+        async (transaction) => {
+          const report = await transaction.report.findUnique({
+            where: { id: reportId },
+            select: { status: true, currentVersion: true },
+          });
+          if (!report) throw new NotFoundException('Report not found');
+          if (report.status !== ReportStatus.SUBMITTED) {
+            throw new ConflictException(
+              'Only submitted reports can be reviewed',
+            );
+          }
+
+          // A status-conditional write serializes competing reviews of the same submission.
+          const changed = await transaction.report.updateMany({
+            where: { id: reportId, status: ReportStatus.SUBMITTED },
+            data: { status: nextStatus, reviewedAt },
+          });
+          if (changed.count !== 1) {
+            throw new ConflictException('Report was reviewed concurrently');
+          }
+
+          const version = await transaction.reportVersion.findUnique({
+            where: {
+              reportId_versionNumber: {
+                reportId,
+                versionNumber: report.currentVersion,
+              },
+            },
+            select: { id: true },
+          });
+          if (!version) {
+            throw new ConflictException(
+              'Submitted report version was not found',
+            );
+          }
+          await transaction.review.create({
+            data: {
+              reportId,
+              versionId: version.id,
+              reviewerId: user.id,
+              action: input.action,
+              comment,
+              createdAt: reviewedAt,
+            },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error.code === 'P2002' || error.code === 'P2034')
+      ) {
+        throw new ConflictException('Report was reviewed concurrently');
+      }
       throw error;
     }
 
