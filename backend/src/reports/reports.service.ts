@@ -181,7 +181,11 @@ export class ReportsService {
           submittedAt: true,
           project: { select: { id: true, name: true } },
         },
-        orderBy: [{ weekStart: 'desc' }, { submittedAt: 'desc' }, { id: 'asc' }],
+        orderBy: [
+          { weekStart: 'desc' },
+          { submittedAt: 'desc' },
+          { id: 'asc' },
+        ],
         skip,
         take: input.limit,
       }),
@@ -228,7 +232,11 @@ export class ReportsService {
     };
   }
 
-  async getVersion(reportId: string, versionNumber: number, user: AuthenticatedUser) {
+  async getVersion(
+    reportId: string,
+    versionNumber: number,
+    user: AuthenticatedUser,
+  ) {
     const report = await this.access.assertCanRead(reportId, user);
     if (!Number.isInteger(versionNumber) || versionNumber < 1) {
       throw new NotFoundException('Report version not found');

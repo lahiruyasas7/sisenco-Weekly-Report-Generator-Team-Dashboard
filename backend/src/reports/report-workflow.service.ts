@@ -249,7 +249,11 @@ export class ReportWorkflowService {
     return this.access.loadForViewer(reportId, user);
   }
 
-  async review(reportId: string, user: AuthenticatedUser, input: ReviewReportDto) {
+  async review(
+    reportId: string,
+    user: AuthenticatedUser,
+    input: ReviewReportDto,
+  ) {
     // The shared access check hides drafts and confirms this reviewer may read the report.
     await this.access.assertCanRead(reportId, user);
     const comment = input.comment?.trim() || null;
@@ -276,7 +280,9 @@ export class ReportWorkflowService {
           });
           if (!report) throw new NotFoundException('Report not found');
           if (report.status !== ReportStatus.SUBMITTED) {
-            throw new ConflictException('Only submitted reports can be reviewed');
+            throw new ConflictException(
+              'Only submitted reports can be reviewed',
+            );
           }
 
           // A status-conditional write serializes competing reviews of the same submission.
@@ -298,7 +304,9 @@ export class ReportWorkflowService {
             select: { id: true },
           });
           if (!version) {
-            throw new ConflictException('Submitted report version was not found');
+            throw new ConflictException(
+              'Submitted report version was not found',
+            );
           }
           await transaction.review.create({
             data: {
