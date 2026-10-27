@@ -18,6 +18,8 @@ import type { AuthenticatedUser } from '../auth/types/authenticated-user.js';
 import { CreateReportDto } from './dto/create-report.dto.js';
 import { ListMyReportsDto } from './dto/list-my-reports.dto.js';
 import { UpdateReportDto } from './dto/update-report.dto.js';
+import { ListReportsDto } from './dto/list-reports.dto.js';
+import { ReviewReportDto } from './dto/review-report.dto.js';
 import { ReportWorkflowService } from './report-workflow.service.js';
 import { ReportsService } from './reports.service.js';
 
@@ -27,6 +29,12 @@ export class ReportsController {
     private readonly reports: ReportsService,
     private readonly workflow: ReportWorkflowService,
   ) {}
+
+  @Get()
+  @Roles(Role.MANAGER, Role.ADMIN)
+  listForReview(@Query() query: ListReportsDto) {
+    return this.reports.listForReview(query);
+  }
 
   @Get('me')
   @Roles(Role.MEMBER)
@@ -54,6 +62,31 @@ export class ReportsController {
     return this.reports.getOne(reportId, user);
   }
 
+  @Get(':id/versions')
+  getVersions(
+    @Param('id', ParseUUIDPipe) reportId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.reports.listVersions(reportId, user);
+  }
+
+  @Get(':id/versions/:versionNumber')
+  getVersion(
+    @Param('id', ParseUUIDPipe) reportId: string,
+    @Param('versionNumber') versionNumber: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.reports.getVersion(reportId, Number(versionNumber), user);
+  }
+
+  @Get(':id/reviews')
+  getReviews(
+    @Param('id', ParseUUIDPipe) reportId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.reports.listReviews(reportId, user);
+  }
+
   @Patch(':id')
   @Roles(Role.MEMBER)
   update(
@@ -71,6 +104,16 @@ export class ReportsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.workflow.submit(reportId, user);
+  }
+
+  @Post(':id/review')
+  @Roles(Role.MANAGER, Role.ADMIN)
+  review(
+    @Param('id', ParseUUIDPipe) reportId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() input: ReviewReportDto,
+  ) {
+    return this.workflow.review(reportId, user, input);
   }
 
   @HttpCode(HttpStatus.NO_CONTENT)
