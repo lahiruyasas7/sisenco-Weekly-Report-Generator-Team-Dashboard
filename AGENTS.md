@@ -24,7 +24,7 @@ Treat this as a real client project: production-quality, secure, tested, explain
 docker compose up -d postgres              # local development database
 cd backend  && npm run start:dev           # API on :3001
 cd backend  && npm run prisma:migrate:dev -- --name user-table  # after schema models exist; use --create-only when adding raw SQL
-cd backend  && npm run seed                # create the first admin from INITIAL_ADMIN_* values
+cd backend  && npm run seed                # seed the initial admin and local demo fixtures (DEMO_SEED_PASSWORD)
 cd backend  && npm test                    # unit
 cd backend  && npm run test:e2e            # CI uses an isolated PostgreSQL service; locally set DATABASE_URL to a disposable database
 cd frontend && npm run dev                 # UI on :3000
@@ -143,7 +143,7 @@ NEEDS_CORRECTION --owner edits, resubmits--> SUBMITTED (new version)
 
 ## Environment variables
 
-Backend: `DATABASE_URL`, `JWT_SECRET` (≥32 bytes, required, no default), `FRONTEND_ORIGIN`, `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_NAME`, `INITIAL_ADMIN_PASSWORD` (seed command only), `PORT=3001`, `NODE_ENV`, `REPORT_TIMEZONE=Asia/Colombo`, `REPORT_DUE_OFFSET_DAYS=7`, `ANTHROPIC_API_KEY` (optional slice only).
+Backend: `DATABASE_URL`, `JWT_SECRET` (≥32 bytes, required, no default), `FRONTEND_ORIGIN`, `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_NAME`, `INITIAL_ADMIN_PASSWORD` (seed command only), `DEMO_SEED_PASSWORD` (local seed command only; required outside production), `PORT=3001`, `NODE_ENV`, `REPORT_TIMEZONE=Asia/Colombo`, `REPORT_DUE_OFFSET_DAYS=7`, `ANTHROPIC_API_KEY` (optional slice only).
 Frontend: `BACKEND_URL`, `NEXT_PUBLIC_REPORT_TIMEZONE` (must match backend `REPORT_TIMEZONE`; defaults to `Asia/Colombo`).
 Provide `.env.example` for both. Validate env at startup (fail fast). Never commit real secrets.
 
@@ -179,13 +179,13 @@ Each slice = backend + frontend + tests, then update this section and commit.
 - [x] 3a. Reports backend: create/edit/submit/delete, snapshot, validation, access service (+ tests)
 - [x] 3b. Report form UI (tasks table, blockers, achievements, hours, notes) + history + detail
 - [x] 4. Review workflow + versions + manager review page (+ full-cycle e2e)
-- [ ] 5. Seed script (needed before dashboard work)
+- [x] 5. Seed script (needed before dashboard work)
 - [ ] 6. Team week view, filters, status tracker, member profile, sections view
 - [ ] 7. Dashboard KPIs + charts + activity feed
 - [ ] 8. README (install/run frontend/backend/DB, demo credentials), deployment, ER diagram image generated from `schema.prisma`
 - [ ] 9. (Optional) AI assistant: tool-use over existing services, manager/admin only, never raw SQL, send minimal fields, no emails/passwords to the LLM, document approach and privacy
 
-Seed (idempotent): 1 admin, 1 manager, 5 members, 5 projects (Client A, Client B, Internal Tooling, R&D, Marketing), 8 weeks per member across all statuses (older mostly APPROVED; recent mixed), one member with no report this week, some late submissions, several reports with 2–3 versions and review comments, some unresolved blockers. Create versions/reviews with explicit timestamps.
+Seed (idempotent): 1 admin, 1 manager, 5 members, 5 projects (Client A, Client B, Internal Tooling, R&D, Marketing), 8 weeks per member across all statuses (older mostly APPROVED; recent mixed), one member with no report this week, some late submissions, several reports with 2–3 versions and review comments, some unresolved blockers. Create versions/reviews with explicit timestamps. Demo data is disabled in production and uses the dedicated `DEMO_SEED_PASSWORD`; reruns restore only the reserved `@example.test` demo identities and seeded fixture records.
 
 ## Decisions log (non-obvious ones only)
 
