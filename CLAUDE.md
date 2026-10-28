@@ -178,7 +178,7 @@ Each slice = backend + frontend + tests, then update this section and commit.
 - [x] 2. Projects CRUD (backend, projects UI, assignment picker, and tests)
 - [x] 3a. Reports backend: create/edit/submit/delete, snapshot, validation, access service (+ tests)
 - [x] 3b. Report form UI (tasks table, blockers, achievements, hours, notes) + history + detail
-- [ ] 4. Review workflow + versions + manager review page (+ full-cycle e2e)
+- [x] 4. Review workflow + versions + manager review page (+ full-cycle e2e)
 - [ ] 5. Seed script (needed before dashboard work)
 - [ ] 6. Team week view, filters, status tracker, member profile, sections view
 - [ ] 7. Dashboard KPIs + charts + activity feed
