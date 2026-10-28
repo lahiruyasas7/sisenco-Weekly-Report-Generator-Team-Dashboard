@@ -23,7 +23,7 @@ function Section({
   );
 }
 
-function Content({ content }: { content: ReportContent }) {
+export function ReportContentView({ content }: { content: ReportContent }) {
   return (
     <div className="space-y-4">
       <Section title="Week and project">
@@ -226,7 +226,7 @@ export function ReportView({ report }: { report: Report }) {
           </p>
         </aside>
       ) : null}
-      <Content content={report.content} />
+      <ReportContentView content={report.content} />
     </div>
   );
 }
