@@ -155,6 +155,37 @@ export type Report = {
   content: ReportContent;
 };
 
+export type ReportReviewAction = 'APPROVED' | 'CHANGES_REQUESTED';
+
+export type ReportVersionSummary = {
+  number: number;
+  submittedAt: string;
+  reviews: ReportReview[];
+};
+
+export type ReportVersion = {
+  number: number;
+  submittedAt: string;
+  content: ReportContent;
+  reviews: ReportReview[];
+};
+
+export type ReportReviewHistoryItem = ReportReview & {
+  versionNumber: number;
+};
+
+export type ManagerReportListItem = {
+  id: string;
+  userId: string;
+  user: { id: string; name: string };
+  weekStart: string;
+  weekEnd: string;
+  status: ReportStatus;
+  currentVersion: number;
+  submittedAt: string | null;
+  project: { id: string; name: string } | null;
+};
+
 export type ReportListItem = {
   id: string;
   weekStart: string;
@@ -172,6 +203,22 @@ export type ReportListParams = {
   status?: ReportStatus;
   from?: string;
   to?: string;
+};
+
+export type ManagerReportListParams = {
+  page?: number;
+  limit?: number;
+  weekStart?: string;
+  from?: string;
+  to?: string;
+  userId?: string;
+  projectId?: string;
+  status?: Exclude<ReportStatus, 'DRAFT'>;
+};
+
+export type ReviewReportInput = {
+  action: ReportReviewAction;
+  comment?: string;
 };
 
 export type CreateReportInput = {
