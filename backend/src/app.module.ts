@@ -16,6 +16,7 @@ import { SameOriginGuard } from './auth/guards/same-origin.guard.js';
 import { PasswordChangeGuard } from './auth/guards/password-change.guard.js';
 import { ProjectsModule } from './projects/projects.module.js';
 import { ReportsModule } from './reports/reports.module.js';
+import { TeamModule } from './team/team.module.js';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { ReportsModule } from './reports/reports.module.js';
     UsersModule,
     ProjectsModule,
     ReportsModule,
+    TeamModule,
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
   ],
   controllers: [AppController, HealthController],

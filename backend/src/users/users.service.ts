@@ -2,16 +2,20 @@ import {
   ConflictException,
   BadRequestException,
   ForbiddenException,
+  InternalServerErrorException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, Role } from '../generated/prisma/client.js';
+import type { ConfigService } from '@nestjs/config';
+import { Prisma, ReportStatus, Role } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PasswordService } from '../auth/password.service.js';
 import type { PublicUser } from '../auth/auth.service.js';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.js';
+import type { Env } from '../config/env.validation.js';
 import type { CreateUserDto } from './dto/create-user.dto.js';
 import type { ListUsersDto } from './dto/list-users.dto.js';
+import type { ListTeamUsersDto } from './dto/list-team-users.dto.js';
 import type { UpdateUserDto } from './dto/update-user.dto.js';
 
 const safeUserSelect = {
@@ -29,6 +33,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwords: PasswordService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   async list(input: ListUsersDto) {
@@ -65,6 +70,128 @@ export class UsersService {
         limit: input.limit,
         total,
         totalPages: Math.ceil(total / input.limit),
+      },
+    };
+  }
+
+  async listTeam(input: ListTeamUsersDto) {
+    const where = { role: Role.MEMBER, isActive: true };
+    const skip = (input.page - 1) * input.limit;
+    const [users, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({
+        where,
+        select: { id: true, name: true },
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        skip,
+        take: input.limit,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    const reportsByUser = new Map<string, Record<ReportStatus, number>>();
+    for (const user of users) {
+      reportsByUser.set(user.id, {
+        [ReportStatus.DRAFT]: 0,
+        [ReportStatus.SUBMITTED]: 0,
+        [ReportStatus.NEEDS_CORRECTION]: 0,
+        [ReportStatus.APPROVED]: 0,
+      });
+    }
+
+    if (users.length > 0) {
+      const groupedReports = await this.prisma.report.groupBy({
+        by: ['userId', 'status'],
+        where: { userId: { in: users.map((user) => user.id) } },
+        _count: { _all: true },
+      });
+      for (const reportGroup of groupedReports) {
+        const counts = reportsByUser.get(reportGroup.userId);
+        if (!counts) {
+          throw new InternalServerErrorException(
+            'Report counts were returned for an unknown team member',
+          );
+        }
+        counts[reportGroup.status] = reportGroup._count._all;
+      }
+    }
+
+    return {
+      data: users.map((user) => {
+        const reportsByStatus = reportsByUser.get(user.id);
+        if (!reportsByStatus) {
+          throw new InternalServerErrorException(
+            'Report counts were not initialized for a team member',
+          );
+        }
+        return { ...user, reportsByStatus };
+      }),
+      meta: {
+        page: input.page,
+        limit: input.limit,
+        total,
+        totalPages: Math.ceil(total / input.limit),
+      },
+    };
+  }
+
+  async profile(userId: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, role: Role.MEMBER },
+      select: { id: true, name: true, isActive: true, createdAt: true },
+    });
+    if (!user) throw new NotFoundException('Member not found');
+
+    const timezone = this.config.get('REPORT_TIMEZONE', { infer: true });
+    const dueOffsetDays = this.config.get('REPORT_DUE_OFFSET_DAYS', {
+      infer: true,
+    });
+    const [aggregates] = await this.prisma.$queryRaw<ProfileAggregate[]>`
+      SELECT
+        COUNT(*) FILTER (WHERE "status" = 'DRAFT') AS "draftCount",
+        COUNT(*) FILTER (WHERE "status" = 'SUBMITTED') AS "submittedCount",
+        COUNT(*) FILTER (WHERE "status" = 'NEEDS_CORRECTION') AS "needsCorrectionCount",
+        COUNT(*) FILTER (WHERE "status" = 'APPROVED') AS "approvedCount",
+        CASE
+          WHEN COUNT("firstSubmittedAt") = 0 THEN NULL
+          ELSE COUNT(*) FILTER (
+            WHERE "firstSubmittedAt" <=
+              (("weekStart" + ${dueOffsetDays})::timestamp AT TIME ZONE ${timezone})
+          )::double precision / COUNT("firstSubmittedAt")::double precision
+        END AS "onTimeRate",
+        COALESCE((
+          SELECT ROUND(AVG(weekly_hours.total_hours)::numeric, 2)::double precision
+          FROM (
+            SELECT r2.id, COALESCE(SUM(t."spentHours"), 0) AS total_hours
+            FROM "Report" r2
+            LEFT JOIN "ReportTask" t ON t."reportId" = r2.id
+            WHERE r2."userId" = ${userId}
+              AND r2."status" IN ('SUBMITTED', 'APPROVED')
+            GROUP BY r2.id
+          ) weekly_hours
+        ), 0)::double precision AS "averageWeeklySpentHours"
+      FROM "Report" r
+      WHERE r."userId" = ${userId}
+    `;
+
+    if (!aggregates) {
+      throw new InternalServerErrorException(
+        'Member report aggregates were not returned',
+      );
+    }
+
+    return {
+      user,
+      stats: {
+        reportsByStatus: {
+          [ReportStatus.DRAFT]: Number(aggregates.draftCount),
+          [ReportStatus.SUBMITTED]: Number(aggregates.submittedCount),
+          [ReportStatus.NEEDS_CORRECTION]: Number(
+            aggregates.needsCorrectionCount,
+          ),
+          [ReportStatus.APPROVED]: Number(aggregates.approvedCount),
+        },
+        onTimeRate: aggregates.onTimeRate,
+        averageWeeklySpentHours: aggregates.averageWeeklySpentHours,
       },
     };
   }
@@ -178,3 +305,12 @@ export class UsersService {
     await this.update(actor, userId, { isActive: false });
   }
 }
+
+type ProfileAggregate = {
+  draftCount: bigint;
+  submittedCount: bigint;
+  needsCorrectionCount: bigint;
+  approvedCount: bigint;
+  onTimeRate: number | null;
+  averageWeeklySpentHours: number;
+};
