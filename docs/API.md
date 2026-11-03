@@ -44,10 +44,27 @@ Registration always assigns `MEMBER`; role assignment is restricted to admins. L
 | POST | /users | ADMIN | create with role + temporary password |
 | PATCH | /users/:id | ADMIN | name / role / isActive; last-active-admin and self-deactivate guards |
 | DELETE | /users/:id | ADMIN | soft deactivate; same guards |
-| GET | /users/team | MANAGER, ADMIN | active members with basic stats |
+| GET | /users/team | MANAGER, ADMIN | paginated active members with all-time report counts by status |
 | GET | /users/:id/profile | MANAGER, ADMIN | member info + stats: counts by status, on-time rate, avg weekly spent hours |
 
-On-time rate = reports with `firstSubmittedAt <= deadline` / reports with `firstSubmittedAt` not null. Avg hours = mean of summed `spentHours` over the member's SUBMITTED/APPROVED reports.
+`GET /users/team` accepts `page` (default 1) and `limit` (default 20, maximum 100). Each member has `id`, `name`, and `reportsByStatus` with counts for every report status.
+
+`GET /users/:id/profile` returns 404 for an unknown user or a user who is not a MEMBER. The profile includes inactive members for historical lookup. Stats cover all time. `onTimeRate` is a fraction from 0 to 1, or `null` if the member has no submitted report. It is calculated as reports with `firstSubmittedAt <= deadline` / reports with `firstSubmittedAt` not null. The deadline is computed per report in `REPORT_TIMEZONE`. `averageWeeklySpentHours` is the mean of summed `spentHours` over the member's SUBMITTED/APPROVED reports, rounded to two decimals.
+
+Example team member:
+
+```json
+{
+  "id": "member-id",
+  "name": "Member Name",
+  "reportsByStatus": {
+    "DRAFT": 1,
+    "SUBMITTED": 2,
+    "NEEDS_CORRECTION": 1,
+    "APPROVED": 5
+  }
+}
+```
 
 ## Projects
 | Method | Path | Roles | Notes |
@@ -125,7 +142,9 @@ Owner: any own report (working copy). MANAGER/ADMIN: non-draft only (snapshot of
 | GET | /reports | MANAGER, ADMIN | non-draft only; filters `weekStart`, `from`, `to`, `userId`, `projectId`, `status`; paginated |
 | POST | /reports/:id/review | MANAGER, ADMIN | `{ action: APPROVED \| CHANGES_REQUESTED, comment? }`; only when SUBMITTED |
 | GET | /team/week-status | MANAGER, ADMIN | `weekStart` → every eligible active member with status incl. `NOT_STARTED` (and `DRAFT`, status only) |
-| GET | /team/sections | MANAGER, ADMIN | `weekStart`, `section=blockers\|achievements\|nextWeek\|notes` → side by side across members (SUBMITTED/APPROVED only) |
+| GET | /team/sections | MANAGER, ADMIN | `weekStart`, `section=blockers\|achievements\|nextWeek\|notes` → current-version section snapshots side by side (SUBMITTED/APPROVED only) |
+
+Both team endpoints require `weekStart` to be a Monday in `YYYY-MM-DD` format. `GET /team/week-status` returns `{ weekStart, weekEnd, data }`; each data row has `user: { id, name }`, `status`, and `reportId`. `reportId` is `null` for `NOT_STARTED` and omitted for `DRAFT`. Draft content is never returned. `GET /team/sections` returns `{ weekStart, weekEnd, section, data }`; each row has `user: { id, name }`, `reportId`, and `content`. `content` is the selected field from the immutable current-version snapshot (`nextWeek` selects `nextWeekTasks`); working report tables are not read for this endpoint.
 
 ## Dashboard (MANAGER, ADMIN)
 Eligible members for a week = active users with role MEMBER created on or before that week's `weekEnd`.
