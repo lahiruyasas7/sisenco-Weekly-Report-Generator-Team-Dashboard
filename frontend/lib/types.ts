@@ -96,6 +96,61 @@ export type ReportStatus =
   | 'NEEDS_CORRECTION'
   | 'APPROVED';
 
+export type TeamReportStatus = ReportStatus | 'NOT_STARTED';
+
+export type TeamWeekStatusItem = {
+  user: { id: string; name: string };
+  status: TeamReportStatus;
+  reportId?: string | null;
+};
+
+export type TeamWeekStatusResponse = {
+  weekStart: string;
+  weekEnd: string;
+  data: TeamWeekStatusItem[];
+};
+
+export type TeamSection = 'blockers' | 'achievements' | 'nextWeek' | 'notes';
+
+export type TeamSectionContent =
+  | ReportContent['blockers']
+  | ReportContent['achievements']
+  | ReportContent['nextWeekTasks']
+  | string;
+
+export type TeamSectionItem = {
+  user: { id: string; name: string };
+  reportId: string;
+  content: TeamSectionContent;
+};
+
+export type TeamSectionResponse = {
+  weekStart: string;
+  weekEnd: string;
+  section: TeamSection;
+  data: TeamSectionItem[];
+};
+
+export type TeamMemberListItem = {
+  id: string;
+  name: string;
+  reportsByStatus: Record<ReportStatus, number>;
+};
+
+export type TeamMemberProfile = {
+  user: {
+    id: string;
+    name: string;
+    isActive: boolean;
+    createdAt: string;
+  };
+  stats: {
+    reportsByStatus: Record<ReportStatus, number>;
+    onTimeRate: number | null;
+    averageWeeklySpentHours: number;
+  };
+};
+
 export type ReportPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type ReportTaskStatus =
   | 'COMPLETED'

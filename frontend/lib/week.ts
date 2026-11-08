@@ -17,3 +17,15 @@ export function getCurrentWeekStart(now = new Date()): string {
   localDate.setUTCDate(localDate.getUTCDate() - weekday + 1);
   return localDate.toISOString().slice(0, 10);
 }
+
+export function shiftWeekStart(weekStart: string, weeks: number): string {
+  const date = new Date(`${weekStart}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + weeks * 7);
+  return date.toISOString().slice(0, 10);
+}
+
+export function getWeekEnd(weekStart: string): string {
+  const date = new Date(`${shiftWeekStart(weekStart, 1)}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
