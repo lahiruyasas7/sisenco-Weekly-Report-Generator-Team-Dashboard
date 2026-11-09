@@ -417,6 +417,10 @@ describe('Member reports API (e2e)', () => {
       .set('Cookie', otherMemberCookie)
       .expect(403);
     await request(app.getHttpServer())
+      .get(`${API}/dashboard/summary?weekStart=2026-10-19`)
+      .set('Cookie', otherMemberCookie)
+      .expect(403);
+    await request(app.getHttpServer())
       .post(`${API}/reports/${reportId}/review`)
       .set('Cookie', otherMemberCookie)
       .send({ action: 'APPROVED' })
