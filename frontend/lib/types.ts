@@ -151,6 +151,93 @@ export type TeamMemberProfile = {
   };
 };
 
+export type DashboardSummary = {
+  weekStart: string;
+  weekEnd: string;
+  totalSubmitted: number;
+  compliance: {
+    onTime: number;
+    late: number;
+    pending: number;
+    eligible: number;
+  };
+  needsCorrection: number;
+  openBlockers: number;
+};
+
+export type DashboardTasksTrendItem = {
+  weekStart: string;
+  completedTasks: number;
+};
+
+export type DashboardTasksTrend = {
+  from: string;
+  to: string;
+  data: DashboardTasksTrendItem[];
+};
+
+export type DashboardStatusByMemberItem = {
+  user: { id: string; name: string };
+  status: TeamReportStatus;
+};
+
+export type DashboardStatusByMember = {
+  weekStart: string;
+  weekEnd: string;
+  data: DashboardStatusByMemberItem[];
+};
+
+export type DashboardWorkloadByProjectItem = {
+  projectId: string;
+  projectName: string;
+  taskCount: number;
+  spentHours: number;
+};
+
+export type DashboardWorkloadByProject = {
+  from: string;
+  to: string;
+  data: DashboardWorkloadByProjectItem[];
+};
+
+export type DashboardTimeByTypeItem = {
+  taskType: ReportTaskType;
+  hours: number;
+};
+
+export type DashboardTimeByType = {
+  from: string;
+  to: string;
+  data: DashboardTimeByTypeItem[];
+};
+
+export type DashboardActivityItem =
+  | {
+      id: string;
+      type: 'SUBMISSION';
+      timestamp: string;
+      reportId: string;
+      weekStart: string;
+      versionNumber: number;
+      member: { id: string; name: string };
+      submittedBy: { id: string; name: string };
+    }
+  | {
+      id: string;
+      type: 'REVIEW';
+      timestamp: string;
+      reportId: string;
+      weekStart: string;
+      action: ReportReviewAction;
+      comment: string | null;
+      member: { id: string; name: string };
+      reviewer: { id: string; name: string };
+    };
+
+export type DashboardActivity = {
+  data: DashboardActivityItem[];
+};
+
 export type ReportPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type ReportTaskStatus =
   | 'COMPLETED'
