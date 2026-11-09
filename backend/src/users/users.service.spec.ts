@@ -1,9 +1,11 @@
 import { ForbiddenException } from '@nestjs/common';
 import { Role } from '../generated/prisma/client.js';
+import { ReportStatus } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PasswordService } from '../auth/password.service.js';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.js';
 import type { CreateUserDto } from './dto/create-user.dto.js';
+import type { ListTeamUsersDto } from './dto/list-team-users.dto.js';
 import type { ListUsersDto } from './dto/list-users.dto.js';
 import type { UpdateUserDto } from './dto/update-user.dto.js';
 import { UsersService } from './users.service.js';
@@ -31,7 +33,16 @@ function createHarness() {
   const user = {
     create: vi.fn(),
     findMany: vi.fn(),
+    findFirst: vi.fn(),
     count: vi.fn(),
+  };
+  const report = {
+    groupBy: vi.fn(),
+  };
+  const config = {
+    get: vi.fn((key: string) =>
+      key === 'REPORT_TIMEZONE' ? 'Asia/Colombo' : 7,
+    ),
   };
   const transactionMock = vi.fn((operation: unknown) => {
     if (Array.isArray(operation)) return Promise.all(operation);
@@ -44,6 +55,8 @@ function createHarness() {
   });
   const prisma = {
     user,
+    report,
+    $queryRaw: vi.fn(),
     $transaction: transactionMock,
   } as unknown as PrismaService;
   const passwords = {
@@ -51,9 +64,11 @@ function createHarness() {
   } as unknown as PasswordService;
 
   return {
-    service: new UsersService(prisma, passwords),
+    service: new UsersService(prisma, passwords, config as never),
     prisma,
     user,
+    report,
+    config,
     transaction,
     passwords,
   };
@@ -244,5 +259,168 @@ describe('UsersService', () => {
       data: [],
       meta: { page: 1, limit: 20, total: 0, totalPages: 0 },
     });
+  });
+
+  it('lists active members with paginated all-time counts by status', async () => {
+    const { service, user, report, prisma } = createHarness();
+    const members = [
+      { id: 'member-1', name: 'Member One' },
+      { id: 'member-2', name: 'Member Two' },
+    ];
+    vi.mocked(user.findMany).mockResolvedValue(members as never);
+    vi.mocked(user.count).mockResolvedValue(3);
+    vi.mocked(report.groupBy).mockResolvedValue([
+      {
+        userId: 'member-1',
+        status: ReportStatus.APPROVED,
+        _count: { _all: 4 },
+      },
+      {
+        userId: 'member-1',
+        status: ReportStatus.SUBMITTED,
+        _count: { _all: 2 },
+      },
+      {
+        userId: 'member-2',
+        status: ReportStatus.DRAFT,
+        _count: { _all: 1 },
+      },
+    ] as never);
+    const query = { page: 2, limit: 2 } satisfies ListTeamUsersDto;
+
+    await expect(service.listTeam(query)).resolves.toEqual({
+      data: [
+        {
+          ...members[0],
+          reportsByStatus: {
+            DRAFT: 0,
+            SUBMITTED: 2,
+            NEEDS_CORRECTION: 0,
+            APPROVED: 4,
+          },
+        },
+        {
+          ...members[1],
+          reportsByStatus: {
+            DRAFT: 1,
+            SUBMITTED: 0,
+            NEEDS_CORRECTION: 0,
+            APPROVED: 0,
+          },
+        },
+      ],
+      meta: { page: 2, limit: 2, total: 3, totalPages: 2 },
+    });
+
+    expect(user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { role: Role.MEMBER, isActive: true },
+        select: { id: true, name: true },
+        skip: 2,
+        take: 2,
+      }),
+    );
+    expect(report.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        by: ['userId', 'status'],
+        where: { userId: { in: ['member-1', 'member-2'] } },
+      }),
+    );
+    expect(prisma.$transaction).toHaveBeenCalledOnce();
+  });
+
+  it('does not query report counts when the team page is empty', async () => {
+    const { service, user, report } = createHarness();
+    vi.mocked(user.findMany).mockResolvedValue([]);
+    vi.mocked(user.count).mockResolvedValue(0);
+
+    await expect(service.listTeam({ page: 1, limit: 20 })).resolves.toEqual({
+      data: [],
+      meta: { page: 1, limit: 20, total: 0, totalPages: 0 },
+    });
+    expect(report.groupBy).not.toHaveBeenCalled();
+  });
+
+  it('returns all-time profile statistics for a member', async () => {
+    const { service, user, prisma, config } = createHarness();
+    const member = {
+      id: 'member-1',
+      name: 'Member One',
+      isActive: false,
+      createdAt: new Date('2025-01-01T00:00:00.000Z'),
+    };
+    vi.mocked(user.findFirst).mockResolvedValue(member as never);
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([
+      {
+        draftCount: 1n,
+        submittedCount: 2n,
+        needsCorrectionCount: 3n,
+        approvedCount: 4n,
+        onTimeRate: 0.75,
+        averageWeeklySpentHours: 31.25,
+      },
+    ] as never);
+
+    await expect(service.profile(member.id)).resolves.toEqual({
+      user: member,
+      stats: {
+        reportsByStatus: {
+          DRAFT: 1,
+          SUBMITTED: 2,
+          NEEDS_CORRECTION: 3,
+          APPROVED: 4,
+        },
+        onTimeRate: 0.75,
+        averageWeeklySpentHours: 31.25,
+      },
+    });
+    expect(user.findFirst).toHaveBeenCalledWith({
+      where: { id: member.id, role: Role.MEMBER },
+      select: { id: true, name: true, isActive: true, createdAt: true },
+    });
+    expect(config.get).toHaveBeenCalledWith('REPORT_TIMEZONE', {
+      infer: true,
+    });
+    expect(config.get).toHaveBeenCalledWith('REPORT_DUE_OFFSET_DAYS', {
+      infer: true,
+    });
+    expect(prisma.$queryRaw).toHaveBeenCalledOnce();
+  });
+
+  it('returns a null on-time rate when a member has no submitted reports', async () => {
+    const { service, user, prisma } = createHarness();
+    vi.mocked(user.findFirst).mockResolvedValue({
+      id: 'member-1',
+      name: 'Member One',
+      isActive: true,
+      createdAt: new Date('2025-01-01T00:00:00.000Z'),
+    } as never);
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([
+      {
+        draftCount: 2n,
+        submittedCount: 0n,
+        needsCorrectionCount: 0n,
+        approvedCount: 0n,
+        onTimeRate: null,
+        averageWeeklySpentHours: 0,
+      },
+    ] as never);
+
+    await expect(service.profile('member-1')).resolves.toMatchObject({
+      stats: {
+        onTimeRate: null,
+        averageWeeklySpentHours: 0,
+      },
+    });
+  });
+
+  it('returns 404 for an unknown or non-member profile', async () => {
+    const { service, user, prisma } = createHarness();
+    vi.mocked(user.findFirst).mockResolvedValue(null);
+
+    await expect(service.profile('user-id')).rejects.toMatchObject({
+      status: 404,
+    });
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
   });
 });
