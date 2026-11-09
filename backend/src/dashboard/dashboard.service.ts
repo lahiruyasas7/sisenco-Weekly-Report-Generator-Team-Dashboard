@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DateTime } from 'luxon';
+import { Prisma } from '../generated/prisma/client.js';
 import { ReportStatus, Role } from '../generated/prisma/client.js';
 import {
   assertMonday,
@@ -13,6 +14,11 @@ import type { Env } from '../config/env.validation.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 const CONTENT_STATUSES = [ReportStatus.SUBMITTED, ReportStatus.APPROVED];
+
+type CompletedTaskTrendRow = {
+  weekStart: string;
+  completedTasks: number;
+};
 
 @Injectable()
 export class DashboardService {
@@ -102,6 +108,49 @@ export class DashboardService {
       },
       needsCorrection,
       openBlockers,
+    };
+  }
+
+  async tasksTrend(fromInput: string, toInput: string, userId?: string) {
+    const timezone = this.config.get('REPORT_TIMEZONE', { infer: true });
+    const from = parseReportDate(fromInput, timezone);
+    const to = parseReportDate(toInput, timezone);
+    assertMonday(from);
+    assertMonday(to);
+    if (to.toMillis() < from.toMillis()) {
+      throw new BadRequestException('to must be on or after from');
+    }
+
+    const userFilter = userId
+      ? Prisma.sql`AND r."userId" = ${userId}`
+      : Prisma.empty;
+    const data = await this.prisma.$queryRaw<CompletedTaskTrendRow[]>`
+      WITH weeks AS (
+        SELECT generate_series(
+          ${from.toFormat('yyyy-MM-dd')}::date,
+          ${to.toFormat('yyyy-MM-dd')}::date,
+          INTERVAL '7 days'
+        )::date AS week_start
+      )
+      SELECT
+        TO_CHAR(weeks.week_start, 'YYYY-MM-DD') AS "weekStart",
+        COUNT(task.id)::int AS "completedTasks"
+      FROM weeks
+      LEFT JOIN "Report" r
+        ON r."weekStart" = weeks.week_start
+        AND r.status IN ('SUBMITTED', 'APPROVED')
+        ${userFilter}
+      LEFT JOIN "ReportTask" task
+        ON task."reportId" = r.id
+        AND task.status = 'COMPLETED'
+      GROUP BY weeks.week_start
+      ORDER BY weeks.week_start
+    `;
+
+    return {
+      from: from.toFormat('yyyy-MM-dd'),
+      to: to.toFormat('yyyy-MM-dd'),
+      data,
     };
   }
 }
