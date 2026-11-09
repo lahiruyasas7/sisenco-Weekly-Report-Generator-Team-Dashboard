@@ -8,7 +8,13 @@ function createHarness() {
   const user = { count: vi.fn() };
   const report = { findMany: vi.fn() };
   const blocker = { count: vi.fn() };
-  const prisma = { user, report, blocker } as unknown as PrismaService;
+  const $queryRaw = vi.fn();
+  const prisma = {
+    user,
+    report,
+    blocker,
+    $queryRaw,
+  } as unknown as PrismaService;
   const config = {
     get: vi.fn((key: string) =>
       key === 'REPORT_TIMEZONE' ? 'Asia/Colombo' : 7,
@@ -20,6 +26,7 @@ function createHarness() {
     user,
     report,
     blocker,
+    $queryRaw,
   };
 }
 
@@ -135,5 +142,49 @@ describe('DashboardService summary', () => {
     expect(user.count).not.toHaveBeenCalled();
     expect(report.findMany).not.toHaveBeenCalled();
     expect(blocker.count).not.toHaveBeenCalled();
+  });
+
+  it('returns completed tasks for every week, including weeks with no matches', async () => {
+    const { service, $queryRaw } = createHarness();
+    vi.mocked($queryRaw).mockResolvedValue([
+      { weekStart: '2026-10-19', completedTasks: 3 },
+      { weekStart: '2026-10-26', completedTasks: 0 },
+      { weekStart: '2026-11-02', completedTasks: 5 },
+    ]);
+
+    await expect(
+      service.tasksTrend('2026-10-19', '2026-11-02'),
+    ).resolves.toEqual({
+      from: '2026-10-19',
+      to: '2026-11-02',
+      data: [
+        { weekStart: '2026-10-19', completedTasks: 3 },
+        { weekStart: '2026-10-26', completedTasks: 0 },
+        { weekStart: '2026-11-02', completedTasks: 5 },
+      ],
+    });
+    expect($queryRaw).toHaveBeenCalledOnce();
+  });
+
+  it('accepts an optional member filter and rejects invalid week ranges', async () => {
+    const { service, $queryRaw } = createHarness();
+    vi.mocked($queryRaw).mockResolvedValue([]);
+
+    await expect(
+      service.tasksTrend(
+        '2026-10-19',
+        '2026-10-26',
+        '2f1e7a5e-b826-4daf-9a7e-6a2181fc778a',
+      ),
+    ).resolves.toMatchObject({ data: [] });
+    expect($queryRaw).toHaveBeenCalledOnce();
+
+    await expect(
+      service.tasksTrend('2026-10-20', '2026-10-26'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.tasksTrend('2026-10-26', '2026-10-19'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect($queryRaw).toHaveBeenCalledOnce();
   });
 });
