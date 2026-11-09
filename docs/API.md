@@ -151,12 +151,12 @@ Eligible members for a week = active users with role MEMBER created on or before
 
 | Method | Path | Definition |
 |---|---|---|
-| GET | /dashboard/summary?weekStart | `totalSubmitted` = week's reports with `firstSubmittedAt` not null; `compliance` = `{ onTime, late, pending, eligible }` (see CLAUDE.md buckets); `needsCorrection` = reports with that status; `openBlockers` = unresolved blockers on SUBMITTED/APPROVED reports of the week |
-| GET | /dashboard/tasks-trend?from&to&userId? | per week: count of tasks with status COMPLETED (SUBMITTED/APPROVED reports); team-wide or one user |
-| GET | /dashboard/status-by-member?weekStart | per eligible member: status incl. NOT_STARTED, for a stacked/segmented chart |
-| GET | /dashboard/workload-by-project?from&to | per project: task count and spent hours, via `report.projectId` |
-| GET | /dashboard/time-by-type?from&to | hours per `TaskType` from `TimeEntry`, team-wide |
-| GET | /dashboard/activity?limit | recent submissions (`ReportVersion.submittedAt`) and reviews (`Review.createdAt`), merged and sorted desc |
+| GET | /dashboard/summary?weekStart | `totalSubmitted` = reports belonging to the selected report week with `firstSubmittedAt` not null, even if submitted in a later week; `compliance` = `{ onTime, late, pending, eligible }` (see CLAUDE.md buckets); `needsCorrection` = reports with that status; `openBlockers` = unresolved blockers on SUBMITTED/APPROVED reports of the week |
+| GET | /dashboard/tasks-trend?from&to&userId? | `from` and `to` are inclusive Monday week starts; returns one `{ weekStart, completedTasks }` row for each week in range, including zero-count weeks. Count tasks with status COMPLETED in SUBMITTED/APPROVED reports; team-wide or filtered to one member. |
+| GET | /dashboard/status-by-member?weekStart | `weekStart` must be a Monday. Returns `{ weekStart, weekEnd, data }`; each row has `user: { id, name }` and `status` (including `NOT_STARTED`). Eligible active members only; draft rows expose status only. |
+| GET | /dashboard/workload-by-project?from&to | Inclusive Monday week-start range. Per project with reports in range: `{ projectId, projectName, taskCount, spentHours }`, aggregated from SUBMITTED/APPROVED reports via `report.projectId`; hours rounded to two decimals. |
+| GET | /dashboard/time-by-type?from&to | Inclusive Monday week-start range. Returns hours per `TaskType` from `TimeEntry` across SUBMITTED/APPROVED reports; includes task types with zero hours and rounds to two decimals. |
+| GET | /dashboard/activity?limit | `limit` defaults to 20 and is capped at 100. Returns newest submissions (`ReportVersion.submittedAt`) and reviews (`Review.createdAt`) merged and sorted descending. Submission rows include version and submitter; review rows include action, comment, and reviewer. |
 
 ## Assistant (optional, last)
 `POST /assistant/chat` (MANAGER, ADMIN). LLM tool-use calling existing services (never raw SQL, never user emails/passwords). Document the prompt design and privacy approach in the README.

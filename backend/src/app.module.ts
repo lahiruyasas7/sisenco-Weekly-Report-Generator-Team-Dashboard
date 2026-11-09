@@ -17,6 +17,7 @@ import { PasswordChangeGuard } from './auth/guards/password-change.guard.js';
 import { ProjectsModule } from './projects/projects.module.js';
 import { ReportsModule } from './reports/reports.module.js';
 import { TeamModule } from './team/team.module.js';
+import { DashboardModule } from './dashboard/dashboard.module.js';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { TeamModule } from './team/team.module.js';
     ProjectsModule,
     ReportsModule,
     TeamModule,
+    DashboardModule,
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
   ],
   controllers: [AppController, HealthController],
