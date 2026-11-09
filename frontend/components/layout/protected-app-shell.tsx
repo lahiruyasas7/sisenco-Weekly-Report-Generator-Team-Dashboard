@@ -17,7 +17,13 @@ function getNavigationItems(role: UserRole): NavigationItem[] {
   return [
     { href: '/', label: 'Dashboard' },
     { href: isManager ? '/manager/reports' : '/reports', label: 'Reports' },
-    ...(isManager ? [{ href: '/manager/sections', label: 'Sections' }] : []),
+    ...(isManager
+      ? [
+          { href: '/manager/team', label: 'Team' },
+          { href: '/manager/team/members', label: 'Members' },
+          { href: '/manager/sections', label: 'Sections' },
+        ]
+      : []),
     { href: '/projects', label: 'Projects' },
     ...(role === 'ADMIN' ? [{ href: '/admin/users', label: 'Users' }] : []),
     { href: '/settings', label: 'Settings' },

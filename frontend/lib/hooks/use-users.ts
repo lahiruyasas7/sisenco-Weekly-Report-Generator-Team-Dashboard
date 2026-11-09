@@ -5,6 +5,8 @@ import type {
   CreateUserInput,
   PaginatedResponse,
   PublicUser,
+  TeamMemberListItem,
+  TeamMemberProfile,
   UpdateUserInput,
   UserListParams,
 } from '@/lib/types';
@@ -26,6 +28,10 @@ export const userQueryKeys = {
   lists: () => [...userQueryKeys.all, 'list'] as const,
   list: (params: UserListParams = {}) =>
     [...userQueryKeys.lists(), normalizeListParams(params)] as const,
+  teamMembers: (page = 1, limit = 20) =>
+    [...userQueryKeys.all, 'team', { page, limit }] as const,
+  memberProfile: (userId: string | undefined) =>
+    [...userQueryKeys.all, 'profile', userId] as const,
 };
 
 function buildListPath(params: UserListParams): string {
@@ -47,6 +53,31 @@ export function useUsers(params: UserListParams = {}) {
         buildListPath(normalizedParams),
       ),
     retry: false,
+  });
+}
+
+export function useTeamMembers(page = 1, limit = 20) {
+  return useQuery({
+    queryKey: userQueryKeys.teamMembers(page, limit),
+    queryFn: () =>
+      apiRequest<PaginatedResponse<TeamMemberListItem>>(
+        `/users/team?page=${page}&limit=${limit}`,
+      ),
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
+export function useTeamMemberProfile(userId: string | undefined) {
+  return useQuery({
+    queryKey: userQueryKeys.memberProfile(userId),
+    queryFn: () =>
+      apiRequest<TeamMemberProfile>(
+        `/users/${encodeURIComponent(userId ?? '')}/profile`,
+      ),
+    enabled: Boolean(userId),
+    retry: false,
+    staleTime: 30_000,
   });
 }
 

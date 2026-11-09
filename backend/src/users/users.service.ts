@@ -155,7 +155,7 @@ export class UsersService {
           WHEN COUNT("firstSubmittedAt") = 0 THEN NULL
           ELSE COUNT(*) FILTER (
             WHERE "firstSubmittedAt" <=
-              (("weekStart" + ${dueOffsetDays})::timestamp AT TIME ZONE ${timezone})
+              (("weekStart" + ${dueOffsetDays}::int)::timestamp AT TIME ZONE ${timezone})
           )::double precision / COUNT("firstSubmittedAt")::double precision
         END AS "onTimeRate",
         COALESCE((
