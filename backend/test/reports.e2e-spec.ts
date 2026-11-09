@@ -425,6 +425,22 @@ describe('Member reports API (e2e)', () => {
       .set('Cookie', otherMemberCookie)
       .expect(403);
     await request(app.getHttpServer())
+      .get(`${API}/dashboard/status-by-member?weekStart=2026-10-19`)
+      .set('Cookie', otherMemberCookie)
+      .expect(403);
+    await request(app.getHttpServer())
+      .get(`${API}/dashboard/workload-by-project?from=2026-10-19&to=2026-10-26`)
+      .set('Cookie', otherMemberCookie)
+      .expect(403);
+    await request(app.getHttpServer())
+      .get(`${API}/dashboard/time-by-type?from=2026-10-19&to=2026-10-26`)
+      .set('Cookie', otherMemberCookie)
+      .expect(403);
+    await request(app.getHttpServer())
+      .get(`${API}/dashboard/activity`)
+      .set('Cookie', otherMemberCookie)
+      .expect(403);
+    await request(app.getHttpServer())
       .post(`${API}/reports/${reportId}/review`)
       .set('Cookie', otherMemberCookie)
       .send({ action: 'APPROVED' })
