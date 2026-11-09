@@ -181,7 +181,7 @@ Each slice = backend + frontend + tests, then update this section and commit.
 - [x] 4. Review workflow + versions + manager review page (+ full-cycle e2e)
 - [x] 5. Seed script (needed before dashboard work)
 - [x] 6. Team week view, filters, status tracker, member profile, sections view
-- [ ] 7. Dashboard KPIs + charts + activity feed
+- [x] 7. Dashboard KPIs + charts + activity feed
 - [ ] 8. README (install/run frontend/backend/DB, demo credentials), deployment, ER diagram image generated from `schema.prisma`
 - [ ] 9. (Optional) AI assistant: tool-use over existing services, manager/admin only, never raw SQL, send minimal fields, no emails/passwords to the LLM, document approach and privacy
 
